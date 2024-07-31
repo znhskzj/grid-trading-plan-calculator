@@ -229,7 +229,16 @@ def save_to_csv():
 # 创建主窗口
 root = tk.Tk()
 root.title("网格交易购买计划")
-root.iconbitmap('app_icon.ico')
+
+# 尝试设置图标
+try:
+    icon_path = 'app_icon.ico'
+    if hasattr(sys, '_MEIPASS'):  # 检查是否在 PyInstaller 环境中
+        icon_path = os.path.join(sys._MEIPASS, 'app_icon.ico')
+    root.iconbitmap(icon_path)
+except Exception as e:
+    print(f"Warning: Could not load icon: {e}")
+
 root.geometry("400x600")
 
 # 加载配置
@@ -265,7 +274,6 @@ tk.Label(root, text="低价位分配更多资金").grid(row=5, column=2, sticky=
 tk.Radiobutton(root, text="线性加权", variable=allocation_method_var, value="2").grid(row=6, column=1, sticky="w")
 tk.Label(root, text="价格越低分配越多资金").grid(row=6, column=2, sticky="w")
 
-# 创建按钮
 # 创建按钮
 button_frame = tk.Frame(root)
 button_frame.grid(row=7, column=0, columnspan=3, pady=5)

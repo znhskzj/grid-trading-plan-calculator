@@ -1,8 +1,8 @@
 # 网格交易计划计算器
 
-版本：1.1.0
+版本：1.2.0
 作者：Rong Zhu
-日期：2024年7月30日
+日期：2024年7月31日
 
 ## 描述
 
@@ -14,6 +14,37 @@
 - 配置保存和加载
 - 交易计划导出为CSV文件
 - 日志记录，便于调试和审计
+
+## 项目结构
+
+- `grid_buying_plan_gui.py`：主程序文件，包含GUI实现和核心逻辑。
+- `app_icon.ico`：应用程序图标文件。
+- `config.json`：配置文件，存储用户的默认设置。
+- `Grid Trading Plan Calculator.spec`：PyInstaller规格文件，用于构建可执行文件。
+- `grid_trading.log`：日志文件，记录程序运行时的信息。
+- `LICENSE`：项目许可证文件。
+- `README.md`：项目说明文件（英文版）。
+- `README-zh-CN.md`：项目说明文件（中文版）。
+- `requirements.txt`：列出项目依赖的Python包。
+
+### scripts 目录
+- `build_exe.py`：用于构建独立可执行文件的脚本。
+
+### dist 目录
+- `Grid Trading Plan Calculator.exe`：构建后的可执行文件。
+
+## 构建说明
+
+要构建独立的可执行文件，请按以下步骤操作：
+
+1. 确保您的系统已安装Python 3.7或更高版本。
+2. 打开命令提示符，导航到项目根目录。
+3. 运行以下命令：
+```
+python scripts/build_exe.py
+```
+4. 构建完成后，可执行文件将位于 `dist` 目录中。
+
 
 ## 安装
 

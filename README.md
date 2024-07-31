@@ -2,7 +2,7 @@
 
 Version: 1.2.0
 Author: Rong Zhu
-Date: July 30, 2024
+Date: July 31, 2024
 
 ## Description
 
@@ -14,6 +14,37 @@ The Grid Trading Plan Calculator is a user-friendly tool with a graphical interf
 - Configuration saving and loading
 - CSV export of trading plans
 - Logging for debugging and auditing
+
+## Project Structure
+
+- `grid_buying_plan_gui.py`: Main program file containing GUI implementation and core logic.
+- `app_icon.ico`: Application icon file.
+- `config.json`: Configuration file storing user's default settings.
+- `Grid Trading Plan Calculator.spec`: PyInstaller specification file for building the executable.
+- `grid_trading.log`: Log file recording program runtime information.
+- `LICENSE`: Project license file.
+- `README.md`: Project readme file (English version).
+- `README-zh-CN.md`: Project readme file (Chinese version).
+- `requirements.txt`: List of Python package dependencies.
+
+### scripts directory
+- `build_exe.py`: Script for building standalone executable.
+
+### dist directory
+- `Grid Trading Plan Calculator.exe`: Built executable file.
+
+## Build Instructions
+
+To build a standalone executable, follow these steps:
+
+1. Ensure you have Python 3.7 or higher installed on your system.
+2. Open a command prompt and navigate to the project root directory.
+3. Run the following command:
+```
+python scripts/build_exe.py
+```
+4. Once the build is complete, the executable will be located in the `dist` directory.
+
 
 ## Installation
 
