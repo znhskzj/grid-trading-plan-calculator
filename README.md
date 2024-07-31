@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.0.0
+Version: 1.2.0
 Author: Rong Zhu
-Date: July 26, 2024
+Date: July 30, 2024
 
 ## Description
 
@@ -60,3 +60,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Support
 
 If you encounter any problems, please file an issue along with a detailed description.
+
+## Changelog
+
+### Version 1.2.0 (July 31, 2024)
+- Added reserved funds feature with new "Calculate with 10% Reserve" and "Calculate with 20% Reserve" buttons
+- Enhanced calculation result display, including average purchase price and maximum potential loss
+- Improved CSV export functionality, resolving Chinese character encoding issues and ensuring all important information is saved
+- Fixed multiple bugs, improving overall program stability
+- Optimized user interface with improved button layout
+
+### Version 1.1.0 (July 30, 2024)
+- Enhanced calculation of purchasable shares based on total funds and initial price
+- Improved "proportional allocation" method to ensure at least 1 share per grid
+- Added more input validations for numerical values
+- Added vertical scrollbar for result display when there are many grids
+- Set tab order for input fields to improve user experience
+
+### Version 1.0.0 (July 26, 2024)
+- Initial release
+- Implemented basic grid trading plan calculation
+- Added GUI with tkinter
+- Implemented multiple allocation methods: Equal amount, Proportional, and Linear weighted
+- Added configuration saving and loading
+- Implemented CSV export of trading plans
+- Added logging for debugging and auditing
