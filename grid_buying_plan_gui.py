@@ -1,8 +1,8 @@
 """
 Grid Trading Plan Calculator
-Version: 1.1.0
+Version: 1.2.0
 Author: (discord)zzann
-Date: July 30, 2024
+Date: July 31, 2024
 
 This program calculates and visualizes grid trading plans.
 For more information, please refer to the README.md file.
