@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.2.0
+Version: 1.3.3
 Author: Rong Zhu
-Date: July 31, 2024
+Date: August 1, 2024
 
 ## Description
 
@@ -93,6 +93,38 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ## Changelog
+
+### Version 1.3.3 (August 1, 2024)
+- Enhanced calculation process stability
+- Improved timeout handling mechanism
+- Optimized state management for calculation threads
+- Added more detailed logging for better troubleshooting
+- Fixed an issue where the calculation would sometimes incorrectly report as timed out even after completion
+- Resolved a problem with the GUI not updating properly after calculation
+- Corrected the behavior of buttons during and after calculation
+
+### Version 1.3.2 (August 1, 2024)
+- Fixed a critical bug in the equal amount allocation method that could cause infinite loops
+- Optimized the calculation logic for all allocation methods to ensure more accurate results
+- Removed automatic recalculation when changing allocation methods to prevent unintended updates
+- Enhanced error handling and logging for better debugging and user experience
+- Simplified allocation method descriptions in the GUI for better clarity
+- Retained detailed explanations of allocation methods in the results display
+- Added more comprehensive logging throughout the calculation process
+
+### Version 1.3.1 (July 31, 2024)
+- Improved equal amount allocation algorithm for more uniform fund distribution across price points
+- Enhanced descriptions for exponential and linear weighted allocations for better differentiation
+- Added display of actual purchase amount for each grid to improve data accuracy
+- Refined explanations of characteristics and effects for different allocation methods
+- Minor bug fixes and performance improvements
+
+### Version 1.3.0 (July 31, 2024)
+- Improved input validation and error handling
+- Added real-time input validation
+- Implemented "Reset to Default" button
+- Using StringVar for better input management
+- Enhanced user experience with more informative error messages
 
 ### Version 1.2.0 (July 31, 2024)
 - Added reserved funds feature with new "Calculate with 10% Reserve" and "Calculate with 20% Reserve" buttons
