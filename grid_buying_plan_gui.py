@@ -23,7 +23,8 @@ from datetime import datetime
 
 # 设置日志
 logging.basicConfig(filename='grid_trading.log', level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    encoding='utf-8')
 
 
 class InvalidInputError(Exception):
@@ -183,6 +184,7 @@ calculation_complete = threading.Event()
 
 
 def run_calculation(event=None, available_funds=None, reserved_funds=0):
+    logging.info(f"用户启动计算 - 分配方式: {allocation_method_var.get()}, 保留资金: {reserved_funds}")
     global calculation_in_progress, calculation_timer, calculation_complete, calculation_start_time
     if calculation_in_progress:
         print("计算已在进行中，忽略新的计算请求")
@@ -393,6 +395,7 @@ def enable_buttons():
 
 
 def save_to_csv():
+    logging.info("用户尝试保存结果为 CSV")
     try:
         content = result_text.get(1.0, tk.END)
         if not content.strip():
@@ -427,6 +430,7 @@ def save_to_csv():
 
 
 def reset_to_default():
+    logging.info("用户重置为默认值")
     funds_var.set(str(config['funds']))
     initial_price_var.set(str(config['initial_price']))
     stop_loss_price_var.set(str(config['stop_loss_price']))

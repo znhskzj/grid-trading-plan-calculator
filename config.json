@@ -1,7 +1,0 @@
-{
-    "funds": 10000.0,
-    "initial_price": 25.0,
-    "stop_loss_price": 15.0,
-    "num_grids": 5,
-    "allocation_method": 0
-}
