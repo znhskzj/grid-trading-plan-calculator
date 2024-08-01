@@ -26,6 +26,9 @@ logging.basicConfig(filename='grid_trading.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     encoding='utf-8')
 
+# Get the logger
+logger = logging.getLogger(__name__)
+
 
 class InvalidInputError(Exception):
     pass
@@ -548,7 +551,8 @@ for i in range(10):
 
 def on_closing():
     print("窗口正在关闭...")
-    root.quit()
+    # root.quit()
+    root.destroy()
 
 
 # 绑定回车键和空格键到计算函数
@@ -556,6 +560,11 @@ root.bind('<Return>', run_calculation)
 root.bind('<space>', run_calculation)
 root.protocol("WM_DELETE_WINDOW", on_closing)
 print("程序启动...")
-sys.stdout.flush()
+# sys.stdout.flush()
 root.mainloop()
 print("程序结束")  # 这行通常不会执行，除非窗口被关闭
+try:
+    root.destroy()
+except:
+    pass
+sys.exit(0)
