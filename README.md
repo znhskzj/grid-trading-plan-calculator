@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.3.3
+Version: 1.3.4
 Author: Rong Zhu
-Date: August 1, 2024
+Date: August 2, 2024
 
 ## Description
 
@@ -93,6 +93,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ## Changelog
+
+### Version 1.3.4 (August 2, 2024)
+- Code Structure Optimization: Reorganized function order for improved clarity and logical structure.
+- PEP 8 Compliance: Adjusted code formatting to adhere to Python's PEP 8 coding standards.
+- Logging System Improvement: Replaced most print statements with the logging module for better control over log output levels and formats.
+- Enhanced Error Handling: Added more exception handling and user-friendly error messages.
+- Performance Optimization: Optimized calculation processes and added timeout mechanisms.
+- Improved Code Readability: Added more comments to make the code easier to understand and maintain.
+- Configuration Management Improvement: Optimized the loading and saving of configurations.
+- GUI Interaction Enhancement: Improved button state management for a better user interaction experience.
+- Optimized proportional allocation algorithm for more pronounced exponential growth.
 
 ### Version 1.3.3 (August 1, 2024)
 - Enhanced calculation process stability
