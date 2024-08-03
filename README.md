@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.3.4
+Version: 1.3.5
 Author: Rong Zhu
-Date: August 2, 2024
+Date: August 3, 2024
 
 ## Description
 
@@ -17,10 +17,13 @@ The Grid Trading Plan Calculator is a user-friendly tool with a graphical interf
 
 ## Project Structure
 
-- `grid_buying_plan_gui.py`: Main program file containing GUI implementation and core logic.
+- `grid_trading_app.py`: Entry point of the application.
+- `gui.py`: Contains the GUI implementation using tkinter.
+- `calculations.py`: Implements core calculation logic for grid trading plans.
+- `config.py`: Manages configuration loading and saving.
+- `api_interface.py`: Placeholder for future API integrations.
 - `app_icon.ico`: Application icon file.
 - `config.json`: Configuration file storing user's default settings.
-- `Grid Trading Plan Calculator.spec`: PyInstaller specification file for building the executable.
 - `grid_trading.log`: Log file recording program runtime information.
 - `LICENSE`: Project license file.
 - `README.md`: Project readme file (English version).
@@ -93,6 +96,14 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ## Changelog
+
+### Version 1.3.5 (August 3, 2024)
+- Major code refactoring for improved modularity and maintainability
+- Separated GUI, calculation logic, and configuration management into distinct modules
+- Enhanced error handling and logging throughout the application
+- Improved type hinting for better code readability and IDE support
+- Prepared structure for future API integrations
+- Updated build process to accommodate new modular structure
 
 ### Version 1.3.4 (August 2, 2024)
 - Code Structure Optimization: Reorganized function order for improved clarity and logical structure.

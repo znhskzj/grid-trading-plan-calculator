@@ -1,8 +1,8 @@
 # 网格交易计划计算器
 
-版本：1.3.4
+版本：1.3.5
 作者：Rong Zhu
-日期：2024年8月2日
+日期：2024年8月3日
 
 ## 描述
 
@@ -17,15 +17,18 @@
 
 ## 项目结构
 
-- `grid_buying_plan_gui.py`：主程序文件，包含GUI实现和核心逻辑。
-- `app_icon.ico`：应用程序图标文件。
-- `config.json`：配置文件，存储用户的默认设置。
-- `Grid Trading Plan Calculator.spec`：PyInstaller规格文件，用于构建可执行文件。
-- `grid_trading.log`：日志文件，记录程序运行时的信息。
-- `LICENSE`：项目许可证文件。
-- `README.md`：项目说明文件（英文版）。
-- `README-zh-CN.md`：项目说明文件（中文版）。
-- `requirements.txt`：列出项目依赖的Python包。
+- `grid_trading_app.py`: 应用程序入口点。
+- `gui.py`: 包含使用tkinter实现的图形用户界面。
+- `calculations.py`: 实现网格交易计划的核心计算逻辑。
+- `config.py`: 管理配置的加载和保存。
+- `api_interface.py`: 为未来的API集成预留的接口。
+- `app_icon.ico`: 应用程序图标文件。
+- `config.json`: 存储用户默认设置的配置文件。
+- `grid_trading.log`: 记录程序运行时信息的日志文件。
+- `LICENSE`: 项目许可证文件。
+- `README.md`: 项目说明文件（英文版）。
+- `README-zh-CN.md`: 项目说明文件（中文版）。
+- `requirements.txt`: Python包依赖列表。
 
 ### scripts 目录
 - `build_exe.py`：用于构建独立可执行文件的脚本。
@@ -93,6 +96,14 @@ python grid_trading_plan.py
 如果您遇到任何问题，请提交 issue 并附上详细描述。
 
 ## 修订记录
+
+### 版本 1.3.5 (2024年8月3日)
+- 对代码进行了重大重构，提高了模块化程度和可维护性
+- 将GUI、计算逻辑和配置管理分离为独立的模块
+- 增强了整个应用程序的错误处理和日志记录
+- 改进了类型提示，提高了代码可读性和IDE支持
+- 为未来的API集成准备了结构
+- 更新了构建过程以适应新的模块化结构
 
 ### 版本 1.3.4 (2024年8月2日)
 - 代码结构优化：重新组织了函数的顺序，使代码结构更加清晰和合理。
