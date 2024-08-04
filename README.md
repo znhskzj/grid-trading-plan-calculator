@@ -121,6 +121,8 @@ If you encounter any problems, please file an issue along with a detailed descri
 
 ### Version 1.4.1 (August 4, 2024)
 - Fixed: Resolved an issue with locale settings in the version comparison step, improving workflow stability.
+- Minor Version Updates: Implemented logic to trigger releases only for minor version updates (e.g., 1.4.0 to 1.5.0) rather than patch updates (e.g., 1.4.0 to 1.4.1).
+- Directory Display in README: Updated the README to display the directory and file structure in plaintext for better clarity on GitHub.
 
 ### Version 1.4.0 (August 4, 2024)
 - Major code refactoring: Implemented modular structure with src directory
