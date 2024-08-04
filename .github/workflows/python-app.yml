@@ -37,8 +37,39 @@ jobs:
         echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       shell: pwsh
 
+    - name: Compare versions
+      id: compare_versions
+      run: |
+        # Extract current version from README.md
+        current_version=$(cat README.md | grep -Po '(?<=Version: ).*')
+        # Extract major and minor versions only
+        current_major=$(echo "$current_version" | cut -d'.' -f1)
+        current_minor=$(echo "$current_version" | cut -d'.' -f2)
+
+        # Retrieve the latest release tag (if any)
+        latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1)) || true
+
+        # If there's no previous tag, assume it's a new version
+        if [[ -z "$latest_tag" ]]; then
+          echo "::set-output name=should_release::true"
+          exit 0
+        fi
+
+        # Extract major and minor versions from the latest tag
+        latest_major=$(echo "$latest_tag" | cut -d'.' -f1)
+        latest_minor=$(echo "$latest_tag" | cut -d'.' -f2)
+
+        # Check if current version is a minor update only
+        if [[ $current_major -eq $latest_major && $current_minor -gt $latest_minor ]]; then
+          echo "::set-output name=should_release::true"
+        else
+          echo "::set-output name=should_release::false"
+        fi
+      shell: bash
+
     - name: Create Tag and Release
       id: create_release
+      if: steps.compare_versions.outputs.should_release == 'true'
       uses: actions/github-script@v6
       env:
         VERSION: ${{ env.VERSION }}
