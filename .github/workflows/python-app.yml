@@ -42,10 +42,7 @@ jobs:
         echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       shell: pwsh
 
-    - name: Set locale
-      run: |
-        locale-gen en_US.UTF-8
-        sudo update-locale LC_ALL=en_US.UTF-8
+    # 删除 Set locale 步骤
 
     - name: Compare versions
       id: compare_versions
