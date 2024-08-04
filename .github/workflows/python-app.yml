@@ -42,8 +42,6 @@ jobs:
         echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       shell: pwsh
 
-    # 删除 Set locale 步骤
-
     - name: Compare versions
       id: compare_versions
       run: |
@@ -58,7 +56,7 @@ jobs:
 
         # If there's no previous tag, assume it's a new version
         if (-not $latest_tag) {
-          Write-Output "::set-output name=should_release::true"
+          Write-Output "should_release=true" >> $env:GITHUB_ENV
           exit 0
         }
 
@@ -68,15 +66,15 @@ jobs:
 
         # Check if current version is a minor update only
         if ($current_major -eq $latest_major -and $current_minor -gt $latest_minor) {
-          Write-Output "::set-output name=should_release::true"
+          Write-Output "should_release=true" >> $env:GITHUB_ENV
         } else {
-          Write-Output "::set-output name=should_release::false"
+          Write-Output "should_release=false" >> $env:GITHUB_ENV
         }
       shell: pwsh
 
     - name: Create Tag and Release
       id: create_release
-      if: steps.compare_versions.outputs.should_release == 'true'
+      if: env.should_release == 'true'
       uses: actions/github-script@v6
       env:
         VERSION: ${{ env.VERSION }}
@@ -119,15 +117,23 @@ jobs:
             owner,
             repo,
             tag: `v${version}`
+          }).catch(err => {
+            if (err.status === 404) {
+              console.log('Release not found, skipping asset upload.');
+              return null;
+            }
+            throw err;
           });
-          
-          console.log('Uploading release asset...');
-          const asset = await fs.readFile('./dist/grid_trading_app.exe');
-          
-          await github.rest.repos.uploadReleaseAsset({
-            owner,
-            repo,
-            release_id: release.data.id,
-            name: 'grid_trading_app.exe',
-            data: asset
-          });
+
+          if (release) {
+            console.log('Uploading release asset...');
+            const asset = await fs.readFile('./dist/grid_trading_app.exe');
+            
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: release.data.id,
+              name: 'grid_trading_app.exe',
+              data: asset
+            });
+          }
