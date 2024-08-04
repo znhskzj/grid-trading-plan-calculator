@@ -8,13 +8,13 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: 3.9
 
@@ -74,33 +74,40 @@ jobs:
 
     - name: Create Tag and Release
       id: create_release
-      if: env.should_release == 'true'
+      if: ${{ env.should_release == 'true' }}  # 使用 ${} 语法来访问环境变量
       uses: actions/github-script@v6
       env:
         VERSION: ${{ env.VERSION }}
+        SHOULD_RELEASE: ${{ env.should_release }}  # 将 should_release 传递给脚本
       with:
-        github-token: ${{secrets.GITHUB_TOKEN}}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const version = process.env.VERSION;
+          const shouldRelease = process.env.SHOULD_RELEASE;  // 访问传递的环境变量
           
-          await github.rest.git.createRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: `refs/tags/v${version}`,
-            sha: context.sha
-          });
-          
-          const release = await github.rest.repos.createRelease({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            tag_name: `v${version}`,
-            name: `Grid Trading Plan Calculator v${version}`,
-            body: `## 新特性\n${context.payload.head_commit.message}\n\n## 安装说明\n1. 下载附件中的 .exe 文件\n2. 双击运行即可使用，无需安装\n\n如有任何问题或建议，欢迎提交 issue。`,
-            draft: false,
-            prerelease: false
-          });
-          
-          return release.data.upload_url;
+          if (shouldRelease === 'true') {
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/v${version}`,
+              sha: context.sha
+            });
+            
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${version}`,
+              name: `Grid Trading Plan Calculator v${version}`,
+              body: `## 新特性\n${context.payload.head_commit.message}\n\n## 安装说明\n1. 下载附件中的 .exe 文件\n2. 双击运行即可使用，无需安装\n\n如有任何问题或建议，欢迎提交 issue。`,
+              draft: false,
+              prerelease: false
+            });
+            
+            return release.data.upload_url;
+          } else {
+            console.log('Release not required, skipping tag creation.');  // 添加日志
+          }
+    
 
     - name: Upload Release Asset
       uses: actions/github-script@v6
