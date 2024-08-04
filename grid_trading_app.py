@@ -1,6 +1,6 @@
 """
 Grid Trading Tool
-Version: 1.4.0
+Version: 1.4.1
 Author: Rong Zhu
 Date: August 4, 2024
 """

@@ -30,6 +30,11 @@ jobs:
     - name: Build executable
       run: pyinstaller --onefile grid_trading_app.py
 
+    - name: Get system locale
+      run: |
+        $locale = (Get-Culture).Name
+        echo "##locale=$locale" >> $GITHUB_ENV
+        
     - name: Get version
       id: get_version
       run: |

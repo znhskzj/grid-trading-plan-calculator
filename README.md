@@ -1,6 +1,6 @@
 # Grid Trading Plan Calculator
 
-Version: 1.4.0
+Version: 1.4.1
 Author: Rong Zhu
 Date: August 4, 2024
 
@@ -116,6 +116,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ## Changelog
+
+### Version 1.4.1 (August 4, 2024)
+- Fixed: Resolved an issue with locale settings in the version comparison step, improving workflow stability.
 
 ### Version 1.4.0 (August 4, 2024)
 - Major code refactoring: Implemented modular structure with src directory
