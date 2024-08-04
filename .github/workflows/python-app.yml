@@ -48,31 +48,31 @@ jobs:
       id: compare_versions
       run: |
         # Extract current version from README.md
-        current_version=$(cat README.md | grep -Po '(?<=Version: ).*')
+        $current_version = (Select-String -Path README.md -Pattern 'Version:').Matches[0].Groups[1].Value.Trim()
         # Extract major and minor versions only
-        current_major=$(echo "$current_version" | cut -d'.' -f1)
-        current_minor=$(echo "$current_version" | cut -d'.' -f2)
+        $current_major = $current_version.Split('.')[0]
+        $current_minor = $current_version.Split('.')[1]
 
         # Retrieve the latest release tag (if any)
-        latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1)) || true
+        $latest_tag = git describe --tags $(git rev-list --tags --max-count=1) || $null
 
         # If there's no previous tag, assume it's a new version
-        if [[ -z "$latest_tag" ]]; then
-          echo "::set-output name=should_release::true"
+        if (-not $latest_tag) {
+          Write-Output "::set-output name=should_release::true"
           exit 0
-        fi
+        }
 
         # Extract major and minor versions from the latest tag
-        latest_major=$(echo "$latest_tag" | cut -d'.' -f1)
-        latest_minor=$(echo "$latest_tag" | cut -d'.' -f2)
+        $latest_major = $latest_tag.Split('.')[0]
+        $latest_minor = $latest_tag.Split('.')[1]
 
         # Check if current version is a minor update only
-        if [[ $current_major -eq $latest_major && $current_minor -gt $latest_minor ]]; then
-          echo "::set-output name=should_release::true"
-        else
-          echo "::set-output name=should_release::false"
-        fi
-      shell: bash
+        if ($current_major -eq $latest_major -and $current_minor -gt $latest_minor) {
+          Write-Output "::set-output name=should_release::true"
+        } else {
+          Write-Output "::set-output name=should_release::false"
+        }
+      shell: pwsh
 
     - name: Create Tag and Release
       id: create_release
