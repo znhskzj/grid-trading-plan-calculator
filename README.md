@@ -18,6 +18,7 @@ The Grid Trading Plan Calculator is a user-friendly tool with a graphical interf
 ## Project Structure
 
 ### Directory and File Structure
+```plaintext
 grid-trading-plan-calculator/
 ├── src/
 │   ├── init.py
