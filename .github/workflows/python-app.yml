@@ -38,7 +38,7 @@ jobs:
     - name: Get version
       id: get_version
       run: |
-        $VERSION = (Select-String -Path README.md -Pattern 'Version:' | Select-Object -First 1).Line.Split(':')[1].Trim()
+        $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
         echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       shell: pwsh
 
@@ -71,6 +71,17 @@ jobs:
           Write-Output "should_release=false" >> $env:GITHUB_ENV
         }
       shell: pwsh
+
+    - name: Update README files
+      run: python scripts/update_readme.py
+    
+    - name: Commit README changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add README.md README.zh-CN.md
+        git commit -m "Update version in README files" || echo "No changes to commit"
+        git push
 
     - name: Create Tag and Release
       id: create_release

@@ -17,11 +17,18 @@ DEFAULT_CONFIG = {
         'stop_loss_price': '30.0',
         'num_grids': '10',
         'allocation_method': '1'
+    }, 'CommonStocks': {
+        'stock1': 'AAPL',
+        'stock2': 'GOOGL',
+        'stock3': 'MSFT',
+        'stock4': 'AMZN',
+        'stock5': 'FB'
     }
+
 }
 
 
-def load_config(config_file: str = 'config.ini') -> Dict[str, str]:
+def load_config(config_file: str = 'config.ini') -> Dict[str, Dict[str, str]]:
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
 
@@ -36,7 +43,7 @@ def load_config(config_file: str = 'config.ini') -> Dict[str, str]:
         logger.warning(f"配置文件 {config_path} 不存在，使用默认配置", extra={'config_module': 'config'})
         save_config(dict(config['General']), config_file)
 
-    return dict(config['General'])
+    return {section: dict(config[section]) for section in config.sections()}
 
 
 def save_config(config: Dict[str, str], config_file: str = 'config.ini'):

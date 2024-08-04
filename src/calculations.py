@@ -2,12 +2,15 @@ import logging
 import numpy as np
 from typing import Dict, List, Tuple
 from .utils import exception_handler
+# from .gui import App
+from .status_manager import StatusManager
 
 logger = logging.getLogger(__name__)
 
 
 @exception_handler
 def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int):
+    StatusManager.update_status("正在验证输入参数...")
     if funds <= 0:
         raise ValueError("总资金必须是正数")
     if initial_price <= 0:
@@ -29,6 +32,7 @@ def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, 
 @exception_handler
 def calculate_weights(prices: List[float], method: int, max_shares: int) -> List[int]:
     logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}")
+    StatusManager.update_status("正在计算权重...")
 
     if len(prices) == 1:
         return [max_shares]
@@ -60,6 +64,7 @@ def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: floa
                        int) -> Tuple[List[Tuple[float, int]],
                                      str]:
     logger.info("开始执行 calculate_buy_plan 函数")
+    StatusManager.update_status("正在计算购买计划...")
     validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)
 
     max_price = initial_price
@@ -109,12 +114,15 @@ def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: floa
 
 
 def run_calculation(input_values: Dict) -> str:
+    StatusManager.update_status("执行计算...")  # 添加此行
     buy_plan, warning_message = calculate_buy_plan(**input_values)
+    StatusManager.update_status("计算完成，正在格式化结果...")  # 添加此行
     return format_results(input_values, buy_plan, warning_message)
 
 
 @exception_handler
 def calculate_with_reserve(input_values: Dict, reserve_percentage: float) -> str:
+    StatusManager.update_status(f"计算中（保留{reserve_percentage}%资金）...")  # 添加此行
     funds = input_values['funds']
     reserved_funds = funds * (reserve_percentage / 100)
     available_funds = funds - reserved_funds
@@ -172,5 +180,8 @@ def format_results(
 
     if warning_message:
         result += f"\n警告: {warning_message}\n"
+        StatusManager.update_status("计算完成，但有警告")  # 添加此行
+    else:
+        StatusManager.update_status("计算完成")  # 添加此行
 
     return result

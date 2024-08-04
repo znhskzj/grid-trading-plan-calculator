@@ -1,12 +1,15 @@
+# grid_trading_app.py
+from version import VERSION, AUTHOR, DATE
 """
 Grid Trading Tool
-Version: 1.4.1
-Author: Rong Zhu
-Date: August 4, 2024
+Version: {VERSION}
+Author: {AUTHOR}
+Date: {DATE}
 """
 
 import os
 import tkinter as tk
+from tkinter import messagebox
 import logging
 from src.gui import App
 from src.config import load_config, convert_json_to_ini
@@ -23,23 +26,34 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
+logger = logging.getLogger(__name__)
+
 
 def main():
-    # 首次运行时转换 JSON 配置到 INI
-    convert_json_to_ini()
+    try:
+        logger.info("程序启动")
 
-    config = load_config()
-    # 将字符串值转换为适当的类型
-    funds = float(config['funds'])
-    initial_price = float(config['initial_price'])
-    stop_loss_price = float(config['stop_loss_price'])
-    num_grids = int(config['num_grids'])
-    allocation_method = int(config['allocation_method'])
+        # 首次运行时转换 JSON 配置到 INI
+        convert_json_to_ini()
+        logger.info("配置转换完成")
 
-    root = tk.Tk()
-    root.title("Grid Trading Tool")
-    app = App(root, config)
-    root.mainloop()
+        config = load_config()
+        logger.info("配置加载完成")
+
+        # 确保 'General' 键存在于配置中
+        if 'General' not in config:
+            raise KeyError("配置文件中缺少 'General' 部分")
+
+        root = tk.Tk()
+        app = App(root, config, VERSION)  # 传递整个 config 字典
+        logger.info("GUI 初始化完成")
+
+        root.mainloop()
+    except Exception as e:
+        logger.error(f"程序运行时发生错误: {str(e)}", exc_info=True)
+        messagebox.showerror("错误", f"程序运行时发生错误: {str(e)}")
+    finally:
+        logger.info("程序结束")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ import os
 from .calculations import run_calculation, calculate_with_reserve
 from .config import load_config
 from .utils import exception_handler
+from .status_manager import StatusManager
+import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -16,87 +18,122 @@ def get_project_root():
 
 
 class App:
-    def __init__(self, master, config):
+    def __init__(self, master, config, version):
         self.master = master
         self.config = config
+        self.version = version
+        master.title(f"Grid Trading Tool v{self.version}")
         self.setup_variables()
         self.create_widgets()
         self.setup_layout()
+        App.instance = self
+        StatusManager.set_instance(self)
 
     def setup_variables(self):
-        self.funds_var = tk.StringVar(value=self.config['funds'])
-        self.initial_price_var = tk.StringVar(value=self.config['initial_price'])
-        self.stop_loss_price_var = tk.StringVar(value=self.config['stop_loss_price'])
-        self.num_grids_var = tk.StringVar(value=self.config['num_grids'])
-        self.allocation_method_var = tk.StringVar(value=self.config['allocation_method'])
+        general_config = self.config['General']
+        self.funds_var = tk.StringVar(value=general_config['funds'])
+        self.initial_price_var = tk.StringVar(value=general_config['initial_price'])
+        self.stop_loss_price_var = tk.StringVar(value=general_config['stop_loss_price'])
+        self.num_grids_var = tk.StringVar(value=general_config['num_grids'])
+        self.allocation_method_var = tk.StringVar(value=general_config['allocation_method'])
 
     def create_widgets(self):
-        # 创建输入框和标签
-        tk.Label(self.master, text="总资金:").grid(row=0, column=0, sticky="e")
-        self.funds_entry = tk.Entry(self.master, textvariable=self.funds_var, validate="key",
-                                    validatecommand=(self.master.register(self.validate_float_input), '%d', '%P'))
-        self.funds_entry.grid(row=0, column=1, sticky="ew")
+        # 创建主框架
+        self.main_frame = tk.Frame(self.master)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        tk.Label(self.master, text="初始价格:").grid(row=1, column=0, sticky="e")
-        self.initial_price_entry = tk.Entry(
-            self.master, textvariable=self.initial_price_var, validate="key",
-            validatecommand=(self.master.register(self.validate_float_input),
-                             '%d', '%P'))
-        self.initial_price_entry.grid(row=1, column=1, sticky="ew")
+        # 创建左侧框架
+        self.left_frame = tk.Frame(self.main_frame, width=120)
+        self.left_frame.grid(row=0, column=0, sticky="ns")
+        self.left_frame.grid_propagate(False)  # 固定左侧框架大小
 
-        tk.Label(self.master, text="止损价格:").grid(row=2, column=0, sticky="e")
-        self.stop_loss_price_entry = tk.Entry(
-            self.master, textvariable=self.stop_loss_price_var, validate="key",
-            validatecommand=(self.master.register(self.validate_float_input),
-                             '%d', '%P'))
-        self.stop_loss_price_entry.grid(row=2, column=1, sticky="ew")
+        # 创建右侧框架
+        self.right_frame = tk.Frame(self.main_frame)
+        self.right_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
 
-        tk.Label(self.master, text="网格数量:").grid(row=3, column=0, sticky="e")
-        self.num_grids_entry = tk.Entry(self.master, textvariable=self.num_grids_var, validate="key",
-                                        validatecommand=(self.master.register(self.validate_int_input), '%d', '%P'))
-        self.num_grids_entry.grid(row=3, column=1, sticky="ew")
+        # 设置列权重，使右侧框架能够扩展
+        self.main_frame.grid_columnconfigure(1, weight=1)
 
-        tk.Label(self.master, text="分配方式:").grid(row=4, column=0, sticky="e")
-        tk.Radiobutton(self.master, text="等金额分配", variable=self.allocation_method_var,
-                       value="0").grid(row=4, column=1, sticky="w")
-        tk.Label(self.master, text="均匀分配资金").grid(row=4, column=2, sticky="w")
-        tk.Radiobutton(self.master, text="等比例分配", variable=self.allocation_method_var,
-                       value="1").grid(row=5, column=1, sticky="w")
-        tk.Label(self.master, text="指数增长分配").grid(row=5, column=2, sticky="w")
-        tk.Radiobutton(self.master, text="线性加权", variable=self.allocation_method_var,
-                       value="2").grid(row=6, column=1, sticky="w")
-        tk.Label(self.master, text="线性增长分配").grid(row=6, column=2, sticky="w")
-
-        # 创建按钮
-        self.button_frame = tk.Frame(self.master)
-        self.button_frame.grid(row=7, column=0, columnspan=3, pady=5)
-
-        self.calculate_button = tk.Button(self.button_frame, text="不保留资金计算", command=self.run_calculation)
-        self.calculate_button.grid(row=0, column=0, padx=5)
-
-        self.reserve_10_button = tk.Button(self.button_frame, text="保留10%计算",
-                                           command=lambda: self.calculate_with_reserve(10))
-        self.reserve_10_button.grid(row=0, column=1, padx=5)
-
-        self.reserve_20_button = tk.Button(self.button_frame, text="保留20%计算",
-                                           command=lambda: self.calculate_with_reserve(20))
-        self.reserve_20_button.grid(row=0, column=2, padx=5)
-
-        self.save_button = tk.Button(self.master, text="保存为CSV", command=self.save_to_csv)
-        self.save_button.grid(row=8, column=1, pady=5)
-
-        self.reset_button = tk.Button(self.master, text="重置为默认值", command=self.reset_to_default)
-        self.reset_button.grid(row=8, column=2, pady=5)
+        self.create_left_widgets()
+        self.create_right_widgets()
 
         # 创建结果显示区域
-        self.result_text = scrolledtext.ScrolledText(self.master, height=20, width=50)
-        self.result_text.grid(row=9, column=0, columnspan=3, sticky="nsew")
+        self.result_frame = tk.Frame(self.main_frame)
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+
+        self.result_text = scrolledtext.ScrolledText(self.result_frame, height=15, width=50)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
+
+        # 创建状态栏
+        self.status_bar = tk.Label(self.master, text="就绪", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def create_left_widgets(self):
+        # 常用标的按钮
+        self.common_stocks_button = tk.Button(self.left_frame, text="常用标的", width=10, command=self.show_common_stocks)
+        self.common_stocks_button.pack(pady=(0, 5))
+
+        # 股票标的按钮
+        stocks = self.config.get('CommonStocks', {})
+        for symbol in stocks.values():
+            btn = tk.Button(self.left_frame, text=symbol, width=10, command=lambda s=symbol: self.set_stock_price(s))
+            btn.pack(pady=2)
+
+    def create_right_widgets(self):
+        # 设置右侧框架的列权重
+        self.right_frame.grid_columnconfigure(1, weight=1)
+
+        # 输入字段
+        labels = ["可用资金:", "初始价格:", "止损价格:", "网格数量:"]
+        vars = [self.funds_var, self.initial_price_var, self.stop_loss_price_var, self.num_grids_var]
+
+        for i, (label, var) in enumerate(zip(labels, vars)):
+            tk.Label(self.right_frame, text=label).grid(row=i, column=0, sticky="e", pady=2)
+            entry = tk.Entry(self.right_frame, textvariable=var, width=20)
+            entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
+
+        # 分配方式
+        tk.Label(self.right_frame, text="分配方式:").grid(row=4, column=0, sticky="e", pady=2)
+        methods = [("等金额分配", "0", "均匀分配资金"),
+                   ("等比例分配", "1", "指数增长分配"),
+                   ("线性加权", "2", "线性增长分配")]
+
+        for i, (text, value, desc) in enumerate(methods):
+            tk.Radiobutton(self.right_frame, text=text, variable=self.allocation_method_var,
+                           value=value).grid(row=4+i, column=1, sticky="w")
+            tk.Label(self.right_frame, text=desc).grid(row=4+i, column=1, sticky="e")
+
+        # 按钮
+        button_frame = tk.Frame(self.right_frame)
+        button_frame.grid(row=7, column=0, columnspan=2, pady=10)
+
+        buttons = [
+            ("计算购买计划", self.run_calculation),
+            ("保留10%计算", lambda: self.calculate_with_reserve(10)),
+            ("保留20%计算", lambda: self.calculate_with_reserve(20)),
+            ("保存为CSV", self.save_to_csv),
+            ("重置为默认值", self.reset_to_default)
+        ]
+
+        for i, (text, command) in enumerate(buttons):
+            tk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=5)
+
+        # API 相关按钮（禁用状态）
+        api_frame = tk.Frame(self.right_frame)
+        api_frame.grid(row=8, column=0, columnspan=2, pady=5)
+
+        tk.Button(api_frame, text="查询可用资金", state='disabled').grid(row=0, column=0, padx=5)
+        tk.Button(api_frame, text="按计划下单", state='disabled').grid(row=0, column=1, padx=5)
+
+    def update_status(self, message):
+        self.status_bar.config(text=message)
 
     def setup_layout(self):
-        for i in range(3):
-            self.master.grid_columnconfigure(i, weight=1)
+        self.master.grid_columnconfigure(1, weight=1)
+        self.master.grid_rowconfigure(0, weight=1)
+        self.right_frame.grid_columnconfigure(1, weight=1)
         for i in range(10):
-            self.master.grid_rowconfigure(i, weight=1)
+            self.right_frame.grid_rowconfigure(i, weight=1)
 
     @exception_handler
     def run_calculation(self):
@@ -163,12 +200,13 @@ class App:
     def reset_to_default(self):
         logger.info("用户重置为默认值")
         config_path = os.path.join(get_project_root(), 'config.ini')
-        config = load_config(config_path)  # 假设 load_config 函数在 config.py 中定义
-        self.funds_var.set(str(config['funds']))
-        self.initial_price_var.set(str(config['initial_price']))
-        self.stop_loss_price_var.set(str(config['stop_loss_price']))
-        self.num_grids_var.set(str(config['num_grids']))
-        self.allocation_method_var.set(str(config['allocation_method']))
+        config = load_config(config_path)
+        general_config = config.get('General', {})
+        self.funds_var.set(str(general_config.get('funds', '')))
+        self.initial_price_var.set(str(general_config.get('initial_price', '')))
+        self.stop_loss_price_var.set(str(general_config.get('stop_loss_price', '')))
+        self.num_grids_var.set(str(general_config.get('num_grids', '')))
+        self.allocation_method_var.set(str(general_config.get('allocation_method', '')))
 
     @staticmethod
     def validate_float_input(action, value_if_allowed):
@@ -193,3 +231,43 @@ class App:
             except ValueError:
                 return False
         return True
+
+    def show_common_stocks(self):
+        # 如果常用标的按钮已经显示，就隐藏它们
+        if self.common_stocks_button['text'] == "隐藏常用标的":
+            for widget in self.left_frame.winfo_children():
+                if widget != self.common_stocks_button:
+                    widget.pack_forget()
+            self.common_stocks_button['text'] = "常用标的"
+        else:
+            # 否则，显示常用标的按钮
+            stocks = self.config.get('CommonStocks', {})
+            for symbol in stocks.values():
+                btn = tk.Button(self.left_frame, text=symbol, width=10,
+                                command=lambda s=symbol: self.set_stock_price(s))
+                btn.pack(pady=2)
+            self.common_stocks_button['text'] = "隐藏常用标的"
+
+    def set_stock_price(self, symbol):
+        try:
+            stock = yf.Ticker(symbol)
+            current_price = stock.info.get('regularMarketPrice') or stock.info.get('currentPrice')
+            if current_price:
+                self.initial_price_var.set(str(current_price))
+            else:
+                raise ValueError("无法获取股票价格")
+        except Exception as e:
+            messagebox.showerror("错误", f"无法获取股票 {symbol} 的价格: {str(e)}")
+
+    def query_available_funds(self):
+        # 这里添加查询可用资金的逻辑
+        pass
+
+    def place_grid_order(self):
+        # 这里添加按计划下单的逻辑
+        pass
+
+    # @classmethod
+    # def update_calculation_status(cls, message):
+    #     if hasattr(cls, 'instance') and cls.instance:
+    #         cls.instance.update_status(message)
