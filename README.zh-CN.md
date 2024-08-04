@@ -18,6 +18,7 @@
 ## 项目结构
 
 ### 目录及文件结构
+```plaintext
 grid-trading-plan-calculator/
 ├── src/
 │   ├── init.py
@@ -42,6 +43,7 @@ grid-trading-plan-calculator/
 ├── README.md
 ├── README-zh-CN.md
 └── .gitignore
+```
 
 ### 主要文件说明：
 - grid_trading_app.py： 应用的主入口文件。
