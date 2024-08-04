@@ -30,14 +30,22 @@ jobs:
     - name: Build executable
       run: pyinstaller --onefile grid_trading_app.py
 
+    - name: Get version
+      id: get_version
+      run: |
+        $VERSION = (Select-String -Path README.md -Pattern 'Version:' | Select-Object -First 1).Line.Split(':')[1].Trim()
+        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+      shell: pwsh
+
     - name: Create Tag and Release
-      id: create_tag_and_release
+      id: create_release
       uses: actions/github-script@v6
+      env:
+        VERSION: ${{ env.VERSION }}
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
-          const fs = require('fs');
-          const version = fs.readFileSync('README.md', 'utf8').match(/Version:\s*([\d.]+)/)[1];
+          const version = process.env.VERSION;
           
           await github.rest.git.createRef({
             owner: context.repo.owner,
@@ -59,11 +67,29 @@ jobs:
           return release.data.upload_url;
 
     - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+      uses: actions/github-script@v6
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ env.VERSION }}
       with:
-        upload_url: ${{ steps.create_tag_and_release.outputs.result }}
-        asset_path: ./dist/grid_trading_app.exe
-        asset_name: grid_trading_app.exe
-        asset_content_type: application/vnd.microsoft.portable-executable
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const fs = require('fs').promises;
+          const { repo: { owner, repo }, sha } = context;
+          const version = process.env.VERSION;
+          
+          const release = await github.rest.repos.getReleaseByTag({
+            owner,
+            repo,
+            tag: `v${version}`
+          });
+          
+          console.log('Uploading release asset...');
+          const asset = await fs.readFile('./dist/grid_trading_app.exe');
+          
+          await github.rest.repos.uploadReleaseAsset({
+            owner,
+            repo,
+            release_id: release.data.id,
+            name: 'grid_trading_app.exe',
+            data: asset
+          });
