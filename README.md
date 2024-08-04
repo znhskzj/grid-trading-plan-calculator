@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.3.5
+Version: 1.4.0
 Author: Rong Zhu
-Date: August 3, 2024
+Date: August 4, 2024
 
 ## Description
 
@@ -17,24 +17,44 @@ The Grid Trading Plan Calculator is a user-friendly tool with a graphical interf
 
 ## Project Structure
 
-- `grid_trading_app.py`: Entry point of the application.
-- `gui.py`: Contains the GUI implementation using tkinter.
-- `calculations.py`: Implements core calculation logic for grid trading plans.
-- `config.py`: Manages configuration loading and saving.
-- `api_interface.py`: Placeholder for future API integrations.
-- `app_icon.ico`: Application icon file.
-- `config.json`: Configuration file storing user's default settings.
-- `grid_trading.log`: Log file recording program runtime information.
-- `LICENSE`: Project license file.
-- `README.md`: Project readme file (English version).
-- `README-zh-CN.md`: Project readme file (Chinese version).
+### Directory and File Structure
+grid-trading-plan-calculator/
+├── src/
+│   ├── init.py
+│   ├── calculations.py
+│   ├── config.py
+│   ├── gui.py
+│   ├── utils.py
+│   └── api_interface.py
+├── tests/
+│   └── test_calculations.py
+├── assets/
+│   └── icons/
+│       └── app_icon.ico
+├── logs/
+│   └── .gitkeep
+├── scripts/
+│   └── build_exe.py
+├── grid_trading_app.py
+├── config.ini
+├── requirements.txt
+├── LICENSE
+├── README.md
+├── README-zh-CN.md
+└── .gitignore
+
+### Main File Descriptions:
+- `grid_trading_app.py`: Main entry point of the application.
+- `src/`: Directory containing core application modules.
+- `tests/`: Directory containing unit tests.
+- `assets/`: Directory for static assets like icons.
+- `logs/`: Directory for log files.
+- `scripts/`: Directory for utility scripts like the build script.
+- `config.ini`: Configuration file storing user's default settings.
 - `requirements.txt`: List of Python package dependencies.
-
-### scripts directory
-- `build_exe.py`: Script for building standalone executable.
-
-### dist directory
-- `Grid Trading Plan Calculator.exe`: Built executable file.
+- `LICENSE`: License file.
+- `README.md`: Main project documentation.
+- `README-zh-CN.md`: Chinese version of the documentation.
 
 ## Build Instructions
 
@@ -53,7 +73,7 @@ python scripts/build_exe.py
 
 ### For Windows Users
 
-1. Go to the [Releases](https://github.com/yourusername/grid-trading-plan-calculator/releases) page.
+1. Go to the [Releases](https://github.com/znhskzj/grid-trading-plan-calculator/releases) page.
 2. Download the latest `.exe` file.
 3. Double-click the downloaded file to run the application.
 
@@ -63,7 +83,7 @@ If you want to run the script from source or contribute to the project:
 
 1. Ensure you have Python 3.7 or higher installed.
 2. Clone the repository:
-git clone https://github.com/yourusername/grid-trading-plan-calculator.git
+git clone https://github.com/znhskzj/grid-trading-plan-calculator.git
 3. Navigate to the project directory:
 cd grid-trading-plan-calculator
 4. Create a virtual environment:
@@ -96,6 +116,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 If you encounter any problems, please file an issue along with a detailed description.
 
 ## Changelog
+
+### Version 1.4.0 (August 4, 2024)
+- Major code refactoring: Implemented modular structure with src directory
+- Introduced pytest framework with comprehensive unit tests
+- Upgraded configuration management from JSON to INI format
+- Enhanced error handling and logging system
+- Optimized project directory structure
+- Updated build script to accommodate new project layout
+- Improved code organization and maintainability
 
 ### Version 1.3.5 (August 3, 2024)
 - Major code refactoring for improved modularity and maintainability

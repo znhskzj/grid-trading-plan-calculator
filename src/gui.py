@@ -3,29 +3,32 @@ from tkinter import messagebox, filedialog, scrolledtext
 import csv
 from datetime import datetime
 import logging
-from calculations import run_calculation, calculate_with_reserve
-from config import save_config
+import os
+from .calculations import run_calculation, calculate_with_reserve
+from .config import load_config
+from .utils import exception_handler
 
 logger = logging.getLogger(__name__)
+
+
+def get_project_root():
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class App:
     def __init__(self, master, config):
         self.master = master
-        self.master.title("网格交易购买计划")
-        self.master.geometry("400x600")
-
         self.config = config
         self.setup_variables()
         self.create_widgets()
         self.setup_layout()
 
     def setup_variables(self):
-        self.funds_var = tk.StringVar(value=str(self.config['funds']))
-        self.initial_price_var = tk.StringVar(value=str(self.config['initial_price']))
-        self.stop_loss_price_var = tk.StringVar(value=str(self.config['stop_loss_price']))
-        self.num_grids_var = tk.StringVar(value=str(self.config['num_grids']))
-        self.allocation_method_var = tk.StringVar(value=str(self.config['allocation_method']))
+        self.funds_var = tk.StringVar(value=self.config['funds'])
+        self.initial_price_var = tk.StringVar(value=self.config['initial_price'])
+        self.stop_loss_price_var = tk.StringVar(value=self.config['stop_loss_price'])
+        self.num_grids_var = tk.StringVar(value=self.config['num_grids'])
+        self.allocation_method_var = tk.StringVar(value=self.config['allocation_method'])
 
     def create_widgets(self):
         # 创建输入框和标签
@@ -95,21 +98,15 @@ class App:
         for i in range(10):
             self.master.grid_rowconfigure(i, weight=1)
 
+    @exception_handler
     def run_calculation(self):
-        try:
-            result = run_calculation(self.get_input_values())
-            self.display_results(result)
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
-            logger.error(f"计算错误: {str(e)}")
+        result = run_calculation(self.get_input_values())
+        self.display_results(result)
 
+    @exception_handler
     def calculate_with_reserve(self, reserve_percentage):
-        try:
-            result = calculate_with_reserve(self.get_input_values(), reserve_percentage)
-            self.display_results(result)
-        except Exception as e:
-            messagebox.showerror("错误", str(e))
-            logger.error(f"计算错误: {str(e)}")
+        result = calculate_with_reserve(self.get_input_values(), reserve_percentage)
+        self.display_results(result)
 
     def get_input_values(self):
         return {
@@ -134,10 +131,13 @@ class App:
                 return
 
             default_filename = f"grid_trading_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            initial_dir = os.path.join(get_project_root(), 'output')  # 假设我们有一个 output 目录
+            os.makedirs(initial_dir, exist_ok=True)  # 确保 output 目录存在
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".csv",
                 filetypes=[("CSV files", "*.csv")],
-                initialfile=default_filename
+                initialfile=default_filename,
+                initialdir=initial_dir
             )
             if not file_path:
                 logger.info("用户取消了保存操作")
@@ -162,11 +162,13 @@ class App:
 
     def reset_to_default(self):
         logger.info("用户重置为默认值")
-        self.funds_var.set(str(self.config['funds']))
-        self.initial_price_var.set(str(self.config['initial_price']))
-        self.stop_loss_price_var.set(str(self.config['stop_loss_price']))
-        self.num_grids_var.set(str(self.config['num_grids']))
-        self.allocation_method_var.set(str(self.config['allocation_method']))
+        config_path = os.path.join(get_project_root(), 'config.ini')
+        config = load_config(config_path)  # 假设 load_config 函数在 config.py 中定义
+        self.funds_var.set(str(config['funds']))
+        self.initial_price_var.set(str(config['initial_price']))
+        self.stop_loss_price_var.set(str(config['stop_loss_price']))
+        self.num_grids_var.set(str(config['num_grids']))
+        self.allocation_method_var.set(str(config['allocation_method']))
 
     @staticmethod
     def validate_float_input(action, value_if_allowed):

@@ -1,0 +1,71 @@
+name: Release Grid Trading Plan Calculator
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Run tests
+      run: pytest
+
+    - name: Build executable
+      run: pyinstaller --onefile grid_trading_app.py
+
+    - name: Get version
+      id: get_version
+      run: |
+        $VERSION = (Select-String -Path README.md -Pattern 'Version:' | Select-Object -First 1).Line.Split(':')[1].Trim()
+        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+
+    - name: Create Tag
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git tag -a v$env:VERSION -m "Release $env:VERSION"
+        git push origin v$env:VERSION
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ env.VERSION }}
+        release_name: Grid Trading Plan Calculator v${{ env.VERSION }}
+        body: |
+          ## 新特性
+          ${{ github.event.head_commit.message }}
+          ## 安装说明
+          1. 下载附件中的 .exe 文件
+          2. 双击运行即可使用，无需安装
+          如有任何问题或建议，欢迎提交 issue。
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/grid_trading_app.exe
+        asset_name: grid_trading_app.exe
+        asset_content_type: application/vnd.microsoft.portable-executable

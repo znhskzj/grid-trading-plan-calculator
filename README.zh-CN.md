@@ -1,8 +1,8 @@
 # 网格交易计划计算器
 
-版本：1.3.5
+版本：1.4.0
 作者：Rong Zhu
-日期：2024年8月3日
+日期：2024年8月4日
 
 ## 描述
 
@@ -17,24 +17,44 @@
 
 ## 项目结构
 
-- `grid_trading_app.py`: 应用程序入口点。
-- `gui.py`: 包含使用tkinter实现的图形用户界面。
-- `calculations.py`: 实现网格交易计划的核心计算逻辑。
-- `config.py`: 管理配置的加载和保存。
-- `api_interface.py`: 为未来的API集成预留的接口。
-- `app_icon.ico`: 应用程序图标文件。
-- `config.json`: 存储用户默认设置的配置文件。
-- `grid_trading.log`: 记录程序运行时信息的日志文件。
-- `LICENSE`: 项目许可证文件。
-- `README.md`: 项目说明文件（英文版）。
-- `README-zh-CN.md`: 项目说明文件（中文版）。
-- `requirements.txt`: Python包依赖列表。
+### 目录及文件结构
+grid-trading-plan-calculator/
+├── src/
+│   ├── init.py
+│   ├── calculations.py
+│   ├── config.py
+│   ├── gui.py
+│   ├── utils.py
+│   └── api_interface.py
+├── tests/
+│   └── test_calculations.py
+├── assets/
+│   └── icons/
+│       └── app_icon.ico
+├── logs/
+│   └── .gitkeep
+├── scripts/
+│   └── build_exe.py
+├── grid_trading_app.py
+├── config.ini
+├── requirements.txt
+├── LICENSE
+├── README.md
+├── README-zh-CN.md
+└── .gitignore
 
-### scripts 目录
-- `build_exe.py`：用于构建独立可执行文件的脚本。
-
-### dist 目录
-- `Grid Trading Plan Calculator.exe`：构建后的可执行文件。
+### 主要文件说明：
+- grid_trading_app.py： 应用的主入口文件。
+- src/： 包含核心应用程序模块的目录。
+- tests/： 包含单元测试的目录。
+- assets/： 用于存放静态资源（例如图标）的目录。
+- logs/： 用于存放日志文件的目录。
+- scripts/： 用于存放实用脚本（例如构建脚本）的目录。
+- config.ini： 存储用户默认设置的配置文件。
+- requirements.txt： 列出 Python 软件包依赖关系的文件。
+- LICENSE： 许可证文件。
+- README.md： 项目的英文说明文档。
+- README-zh-CN.md： 项目的中文说明文档。
 
 ## 构建说明
 
@@ -53,7 +73,7 @@ python scripts/build_exe.py
 
 ### Windows用户
 
-1. 前往[发布页面](https://github.com/yourusername/grid-trading-plan-calculator/releases)。
+1. 前往[发布页面](https://github.com/znhskzj/grid-trading-plan-calculator/releases)。
 2. 下载最新的`.exe`文件。
 3. 双击下载的文件即可运行应用程序。
 
@@ -63,7 +83,7 @@ python scripts/build_exe.py
 
 1. 确保已安装 Python 3.7 或更高版本。
 2. 克隆仓库：
-git clone https://github.com/yourusername/grid-trading-plan-calculator.git
+git clone https://github.com/znhskzj/grid-trading-plan-calculator.git
 3. 进入项目目录：
 cd grid-trading-plan-calculator
 4. 创建虚拟环境：

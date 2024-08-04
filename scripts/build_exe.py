@@ -2,44 +2,68 @@ import os
 import subprocess
 import sys
 import tkinter as tk
+import shutil
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def install_dependencies():
-    print("Installing required packages...")
-    packages = ["pyinstaller", "numpy", "pyyaml", "structlog", "pytest", "pylint", "black"]
-    for package in packages:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+    logging.info("Installing required packages...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to install dependencies: {e}")
+        sys.exit(1)
 
 
 def check_tkinter():
     try:
         tk.Tk()
-        print("Tkinter is available.")
+        logging.info("Tkinter is available.")
     except:
-        print("Error: Tkinter is not properly installed.")
-        print("Please ensure you have Tkinter installed with your Python distribution.")
+        logging.error("Tkinter is not properly installed.")
+        logging.error("Please ensure you have Tkinter installed with your Python distribution.")
         sys.exit(1)
 
 
+def clean_build():
+    logging.info("Cleaning old build files...")
+    dirs_to_clean = ['build', 'dist']
+    files_to_clean = ['Grid Trading Tool.spec']
+    for dir in dirs_to_clean:
+        if os.path.exists(dir):
+            shutil.rmtree(dir)
+    for file in files_to_clean:
+        if os.path.exists(file):
+            os.remove(file)
+
+
 def build_exe():
-    print("Building executable...")
+    logging.info("Building executable...")
     pyinstaller_command = [
         "pyinstaller",
         "--onefile",
         "--windowed",
         "--name=Grid Trading Tool",
-        "--add-data=app_icon.ico;.",
-        "--icon=app_icon.ico",
+        "--add-data=assets/icons/app_icon.ico;assets/icons",
+        "--icon=assets/icons/app_icon.ico",
+        "--add-data=src;src",
         "grid_trading_app.py"
     ]
-    subprocess.check_call(pyinstaller_command)
+    try:
+        subprocess.check_call(pyinstaller_command)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error building executable: {e}")
+        sys.exit(1)
 
 
 def main():
     check_tkinter()
     install_dependencies()
+    clean_build()
     build_exe()
-    print("Build complete. Executable can be found in the 'dist' folder.")
+    logging.info("Build complete. Executable can be found in the 'dist' folder.")
 
 
 if __name__ == "__main__":

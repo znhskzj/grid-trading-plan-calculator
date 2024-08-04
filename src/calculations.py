@@ -1,10 +1,12 @@
-import numpy as np
 import logging
+import numpy as np
 from typing import Dict, List, Tuple
+from .utils import exception_handler
 
 logger = logging.getLogger(__name__)
 
 
+@exception_handler
 def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int):
     if funds <= 0:
         raise ValueError("总资金必须是正数")
@@ -24,15 +26,23 @@ def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, 
         raise ValueError("网格数量不能超过100")
 
 
+@exception_handler
 def calculate_weights(prices: List[float], method: int, max_shares: int) -> List[int]:
     logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}")
+
+    if len(prices) == 1:
+        return [max_shares]
+
     if method == 0:  # 等金额分配
         weights = [1] * len(prices)
     elif method == 1:  # 等比例分配 - 指数增长策略
         max_price = max(prices)
         min_price = min(prices)
         price_range = max_price - min_price
-        weights = [np.exp(3 * (max_price - price) / price_range) for price in prices]
+        if price_range == 0:
+            weights = [1] * len(prices)
+        else:
+            weights = [np.exp(3 * (max_price - price) / price_range) for price in prices]
     elif method == 2:  # 线性加权 - 低价格更高权重
         weights = list(range(1, len(prices) + 1))
     else:
@@ -45,6 +55,7 @@ def calculate_weights(prices: List[float], method: int, max_shares: int) -> List
     return initial_shares
 
 
+@exception_handler
 def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method:
                        int) -> Tuple[List[Tuple[float, int]],
                                      str]:
@@ -102,6 +113,7 @@ def run_calculation(input_values: Dict) -> str:
     return format_results(input_values, buy_plan, warning_message)
 
 
+@exception_handler
 def calculate_with_reserve(input_values: Dict, reserve_percentage: float) -> str:
     funds = input_values['funds']
     reserved_funds = funds * (reserve_percentage / 100)
