@@ -43,6 +43,7 @@ grid-trading-plan-calculator/
 ├── README.md
 ├── README-zh-CN.md
 └── .gitignore
+```
 
 ### Main File Descriptions:
 - `grid_trading_app.py`: Main entry point of the application.
