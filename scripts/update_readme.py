@@ -4,17 +4,19 @@ import re
 import sys
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
+# 获取项目根目录并添加到 Python 路径
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from version import VERSION, AUTHOR, DATE
+from version import VERSION, AUTHOR, DATE  # 在添加路径之后再导入
 
 def update_readme(filename):
     with open(filename, 'r', encoding='utf-8') as file:
         content = file.read()
 
-    if filename.endswith('README.zh-CN.md'):
+    filename_str = str(filename)  # 将 Path 对象转换为字符串
+
+    if filename_str.endswith('README.zh-CN.md'):
         content = re.sub(r'版本：.*', f'版本：{VERSION}', content)
         content = re.sub(r'作者：.*', f'作者：{AUTHOR}', content)
         content = re.sub(r'日期：.*', f'日期：{DATE}', content)
@@ -25,7 +27,6 @@ def update_readme(filename):
 
     with open(filename, 'w', encoding='utf-8') as file:
         file.write(content)
-
 
 if __name__ == "__main__":
     root_dir = Path(__file__).parent.parent  # 获取项目根目录
