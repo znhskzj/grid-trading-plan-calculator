@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: {VERSION}
-Author: {AUTHOR}
-Date: {DATE}
+Version: 1.5.0
+Author: Rong Zhu
+Date: August 5, 2024
 
 ## Description
 
