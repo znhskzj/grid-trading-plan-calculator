@@ -1,7 +1,56 @@
-from src.calculations import validate_inputs, calculate_weights, calculate_buy_plan
 import pytest
 import sys
 import os
+from unittest.mock import Mock, patch, ANY
+import tkinter as tk
+from src.gui import App
+from src.calculations import validate_inputs, calculate_weights, calculate_buy_plan
+import yfinance as yf
+from version import VERSION
+
+# 模拟 tkinter
+sys.modules['tkinter'] = Mock()
+
+
+class MockStringVar:
+    def __init__(self, value=''):
+        self._value = value
+
+    def get(self):
+        return self._value
+
+    def set(self, value):
+        self._value = value
+
+
+tk.Tk = Mock()
+tk.Frame = Mock()
+tk.Label = Mock()
+tk.Button = Mock()
+tk.StringVar = MockStringVar
+
+
+class MockTk:
+    def __init__(self, screenName=None, baseName=None, className='Tk', useTk=True, sync=False, use=None):
+        pass
+
+    def __getattr__(self, name):
+        return Mock()
+
+
+class MockStatusManager:
+    @staticmethod
+    def set_instance(instance):
+        pass
+
+    @staticmethod
+    def update_status(message):
+        pass
+
+
+sys.modules['tkinter'].Tk = MockTk
+sys.modules['tkinter'].StringVar = MockStringVar
+sys.modules['tkinter'].messagebox = Mock()
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -128,6 +177,95 @@ def test_calculate_buy_plan_warnings():
 
     _, warning = calculate_buy_plan(1000000, 100, 90, 2, 0)
     assert warning == ""  # 不应该有警告
+
+
+@pytest.fixture
+def mock_app():
+    with patch('tkinter.Tk', MockTk), patch('src.gui.StatusManager', MockStatusManager):
+        mock_config = {
+            'General': {
+                'funds': '50000.0',
+                'initial_price': '100.0',
+                'stop_loss_price': '90.0',
+                'num_grids': '10',
+                'allocation_method': '1'
+            },
+            'CommonStocks': {'stock1': 'AAPL', 'stock2': 'GOOGL'}
+        }
+        app = App(None, mock_config, VERSION)
+
+        # 模拟 App 的属性
+        app.left_frame = Mock()
+        app.right_frame = Mock()
+        app.status_bar = Mock()
+        app.status_bar.config = Mock(return_value=None)
+        app.result_text = Mock(get=Mock(return_value=""), delete=Mock(), insert=Mock())
+        app.common_stocks_button = Mock()
+        app.common_stocks_button.__getitem__ = Mock(return_value="常用标的")
+        app.common_stocks_button.__setitem__ = Mock()
+        app.funds_var = MockStringVar('50000.0')
+        app.initial_price_var = MockStringVar('100.0')
+        app.stop_loss_price_var = MockStringVar('90.0')
+        app.num_grids_var = MockStringVar('10')
+        app.allocation_method_var = MockStringVar('1')
+
+        # 模拟 left_frame.winfo_children
+        app.left_frame.winfo_children = Mock(return_value=[])
+        app.master = Mock()
+        app.master._last_child_ids = Mock()
+        app.master._last_child_ids.get = Mock(return_value=0)
+
+        # 模拟 config 属性
+        app.config = Mock()
+        app.config.get = Mock(return_value=mock_config['CommonStocks'])
+
+    return app
+
+
+def test_set_stock_price(mock_app):
+    with patch('yfinance.Ticker') as mock_yf:
+        mock_yf.return_value.info = {'regularMarketPrice': 150.0}
+        mock_app.set_stock_price('AAPL')
+        assert mock_app.initial_price_var.get() == '150.0'
+        mock_app.status_bar.config.assert_called()
+        assert any("已选择标的 AAPL" in str(call) for call in mock_app.status_bar.config.call_args_list)
+
+        mock_yf.return_value.info = {}
+        mock_app.set_stock_price('INVALID')
+        mock_app.status_bar.config.assert_called()
+        assert any("无法获取股票 INVALID 的价格" in str(call) for call in mock_app.status_bar.config.call_args_list)
+
+
+def test_run_calculation(mock_app):
+    with patch('src.calculations.run_calculation', return_value="模拟计算结果"):
+        mock_app.run_calculation()
+        mock_app.status_bar.config.assert_called()
+        assert any("开始计算购买计划" in str(call) for call in mock_app.status_bar.config.call_args_list)
+        mock_app.result_text.delete.assert_called()
+        mock_app.result_text.insert.assert_called()
+        assert any("计算完成" in str(call) for call in mock_app.status_bar.config.call_args_list)
+
+
+def test_placeholder_methods(mock_app):
+    methods = [
+        mock_app.enable_real_time_notifications,
+        mock_app.query_available_funds,
+        mock_app.place_order_by_plan,
+        mock_app.export_transaction_details,
+        mock_app.calculate_total_profit
+    ]
+    for method in methods:
+        method()
+        mock_app.status_bar.config.assert_called()
+        assert any("尚未实现" in str(call) for call in mock_app.status_bar.config.call_args_list)
+
+
+def test_show_common_stocks(mock_app):
+    mock_app.show_common_stocks()
+    # 检查按钮文本是否被设置为 "隐藏常用标的"
+    mock_app.common_stocks_button.__setitem__.assert_called_with('text', "隐藏常用标的")
+    # 检查是否尝试获取 CommonStocks 配置
+    mock_app.config.get.assert_called_with('CommonStocks', {})
 
 # 添加更多测试...
 

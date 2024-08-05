@@ -1,5 +1,5 @@
 # version.py
 
-VERSION = "1.4.3"
+VERSION = "1.5.0"
 AUTHOR = "Rong Zhu"
-DATE = "August 4, 2024"
+DATE = "August 5, 2024"

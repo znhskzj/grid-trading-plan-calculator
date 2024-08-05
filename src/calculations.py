@@ -114,20 +114,21 @@ def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: floa
 
 
 def run_calculation(input_values: Dict) -> str:
-    StatusManager.update_status("执行计算...")  # 添加此行
+    StatusManager.update_status("开始计算购买计划...")
     buy_plan, warning_message = calculate_buy_plan(**input_values)
-    StatusManager.update_status("计算完成，正在格式化结果...")  # 添加此行
+    StatusManager.update_status("计算完成，正在生成结果报告...")
     return format_results(input_values, buy_plan, warning_message)
 
 
 @exception_handler
 def calculate_with_reserve(input_values: Dict, reserve_percentage: float) -> str:
-    StatusManager.update_status(f"计算中（保留{reserve_percentage}%资金）...")  # 添加此行
+    StatusManager.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
     funds = input_values['funds']
     reserved_funds = funds * (reserve_percentage / 100)
     available_funds = funds - reserved_funds
     input_values['funds'] = available_funds
     buy_plan, warning_message = calculate_buy_plan(**input_values)
+    StatusManager.update_status("计算完成，正在生成结果报告...")
     return format_results(input_values, buy_plan, warning_message, reserved_funds)
 
 

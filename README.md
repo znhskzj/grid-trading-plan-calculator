@@ -12,7 +12,8 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 
 - Multiple allocation methods: Equal amount, Proportional, and Linear weighted
 - Real-time stock price fetching for common stocks
-- Dynamic status updates during calculations
+- Dynamic common stock buttons in the left panel
+- Live status bar for immediate feedback and error messages
 - Configuration saving and loading
 - CSV export of trading plans
 - Comprehensive logging for debugging and auditing
@@ -118,9 +119,12 @@ python grid_trading_plan.py
 ## Usage
 
 1. Launch the application.
-2. Input your trading parameters.
-3. Click "Calculate" to generate the grid trading plan.
-4. Use "Save as CSV" to export the results if needed.
+2. Click "Common Stocks" to view and select from predefined stocks.
+3. Select a stock to automatically fetch its current price, or manually input trading parameters.
+4. Choose an allocation method (Equal amount, Proportional, or Linear weighted).
+5. Click "Calculate" to generate the grid trading plan.
+6. View the results in the display area and check the status bar for feedback.
+7. Use "Save as CSV" to export the results if needed.
 
 ## License
 

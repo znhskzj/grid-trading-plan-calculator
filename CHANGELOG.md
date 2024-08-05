@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2024-08-05
+
+### Added
+- Implemented dynamic common stock buttons in the left panel
+- Added real-time stock price fetching for selected stocks
+- Introduced a status bar for live feedback and error messages
+
+### Changed
+- Enhanced GUI layout with better organization of widgets
+- Improved error handling and user feedback throughout the application
+- Optimized the process of displaying and hiding common stocks
+
+### Fixed
+- Resolved issues with repeated stock button creation
+- Fixed status bar update mechanism
+- Corrected stock price display in the input field
+
+### Others
+- Refactored code for better modularity and maintainability
+- Updated error logging for more comprehensive debugging
+- Improved configuration handling for common stocks
+- Enhanced unit tests for better coverage and reliability
+- Optimized mock objects in test environment for more accurate simulation of GUI behavior
+- Resolved warnings related to mock objects in testing scenarios
+
 ## [1.4.3] - 2024-08-04
 
 ### Added
