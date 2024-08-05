@@ -1,6 +1,5 @@
 # scripts/update_readme.py
 
-from version import VERSION, AUTHOR, DATE
 import re
 import sys
 from pathlib import Path
@@ -9,6 +8,7 @@ from pathlib import Path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
+from version import VERSION, AUTHOR, DATE
 
 def update_readme(filename):
     with open(filename, 'r', encoding='utf-8') as file:
