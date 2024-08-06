@@ -45,13 +45,13 @@ jobs:
     - name: Compare versions
       id: compare_versions
       run: |
-          $latest_tag = git describe --tags $(git rev-list --tags --max-count=1) || ""
+          $latest_tag = (git describe --tags $(git rev-list --tags --max-count=1) 2>$null) -replace '^v', ''
           if (-not $latest_tag) {
             Write-Output "should_release=true" >> $env:GITHUB_ENV
             exit 0
           }
           $current_version = $env:VERSION
-          if ([System.Version]$current_version -gt [System.Version]$latest_tag.TrimStart('v')) {
+          if ([version]$current_version -gt [version]$latest_tag) {
             Write-Output "should_release=true" >> $env:GITHUB_ENV
           } else {
             Write-Output "should_release=false" >> $env:GITHUB_ENV
