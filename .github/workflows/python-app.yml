@@ -35,12 +35,12 @@ jobs:
         $locale = (Get-Culture).Name
         Write-Host "##locale=$locale"
 
-        - name: Get version
-        id: get_version
-        run: |
-          $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
-          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
-        shell: pwsh
+    - name: Get version
+      id: get_version
+      run: |
+        $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
+        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+      shell: pwsh
   
     - name: Compare versions
       id: compare_versions
