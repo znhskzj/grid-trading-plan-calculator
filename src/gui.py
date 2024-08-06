@@ -8,6 +8,7 @@ from .calculations import run_calculation, calculate_with_reserve
 from .config import load_config
 from .utils import exception_handler
 from .status_manager import StatusManager
+from src.utils import compare_versions, get_latest_version
 from unittest.mock import Mock
 import yfinance as yf
 
@@ -331,4 +332,20 @@ class App:
 
     def query_available_funds(self):
         # 这里添加查询可用资金的逻辑
+        pass
+
+    def check_for_updates(self):
+        current_version = "1.5.0"  # 从 version.py 中获取
+        latest_version = get_latest_version()
+        
+        if latest_version and compare_versions(current_version, latest_version):
+            response = messagebox.askyesno(
+                "更新可用",
+                f"发现新版本 {latest_version}。是否现在更新？"
+            )
+            if response:
+                self.start_update(latest_version)
+    
+    def start_update(self, version):
+        # 实现更新逻辑
         pass

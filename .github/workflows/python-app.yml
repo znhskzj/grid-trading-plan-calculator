@@ -35,43 +35,29 @@ jobs:
         $locale = (Get-Culture).Name
         Write-Host "##locale=$locale"
 
-    - name: Get version
-      id: get_version
-      run: |
-        $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
-        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
-      shell: pwsh
-
+        - name: Get version
+        id: get_version
+        run: |
+          $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+        shell: pwsh
+  
     - name: Compare versions
       id: compare_versions
       run: |
-        # Extract current version from README.md
-        $current_version = (Select-String -Path README.md -Pattern 'Version:').Matches[0].Groups[1].Value.Trim()
-        # Extract major and minor versions only
-        $current_major = $current_version.Split('.')[0]
-        $current_minor = $current_version.Split('.')[1]
-
-        # Retrieve the latest release tag (if any)
-        $latest_tag = git describe --tags $(git rev-list --tags --max-count=1) || $null
-
-        # If there's no previous tag, assume it's a new version
-        if (-not $latest_tag) {
-          Write-Output "should_release=true" >> $env:GITHUB_ENV
-          exit 0
-        }
-
-        # Extract major and minor versions from the latest tag
-        $latest_major = $latest_tag.Split('.')[0]
-        $latest_minor = $latest_tag.Split('.')[1]
-
-        # Check if current version is a minor update only
-        if ($current_major -eq $latest_major -and $current_minor -gt $latest_minor) {
-          Write-Output "should_release=true" >> $env:GITHUB_ENV
-        } else {
-          Write-Output "should_release=false" >> $env:GITHUB_ENV
-        }
+          $latest_tag = git describe --tags $(git rev-list --tags --max-count=1) || ""
+          if (-not $latest_tag) {
+            Write-Output "should_release=true" >> $env:GITHUB_ENV
+            exit 0
+          }
+          $current_version = $env:VERSION
+          if ([System.Version]$current_version -gt [System.Version]$latest_tag.TrimStart('v')) {
+            Write-Output "should_release=true" >> $env:GITHUB_ENV
+          } else {
+            Write-Output "should_release=false" >> $env:GITHUB_ENV
+          }
       shell: pwsh
-
+  
     - name: Update README files
       run: python scripts/update_readme.py
     
@@ -85,40 +71,34 @@ jobs:
 
     - name: Create Tag and Release
       id: create_release
-      if: ${{ env.should_release == 'true' }}  # 使用 ${} 语法来访问环境变量
+      if: ${{ env.should_release == 'true' }}
       uses: actions/github-script@v6
       env:
         VERSION: ${{ env.VERSION }}
-        SHOULD_RELEASE: ${{ env.should_release }}  # 将 should_release 传递给脚本
+        should_release: ${{ env.should_release }}
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const version = process.env.VERSION;
-          const shouldRelease = process.env.SHOULD_RELEASE;  // 访问传递的环境变量
           
-          if (shouldRelease === 'true') {
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/v${version}`,
-              sha: context.sha
-            });
-            
-            const release = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `v${version}`,
-              name: `Grid Trading Plan Calculator v${version}`,
-              body: `## 新特性\n${context.payload.head_commit.message}\n\n## 安装说明\n1. 下载附件中的 .exe 文件\n2. 双击运行即可使用，无需安装\n\n如有任何问题或建议，欢迎提交 issue。`,
-              draft: false,
-              prerelease: false
-            });
-            
-            return release.data.upload_url;
-          } else {
-            console.log('Release not required, skipping tag creation.');  // 添加日志
-          }
-    
+          await github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: `refs/tags/v${version}`,
+            sha: context.sha
+          });
+          
+          const release = await github.rest.repos.createRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            tag_name: `v${version}`,
+            name: `Grid Trading Plan Calculator v${version}`,
+            body: `## 新特性\n${context.payload.head_commit.message}\n\n## 安装说明\n1. 下载附件中的 .exe 文件\n2. 双击运行即可使用，无需安装\n\n如有任何问题或建议，欢迎提交 issue。`,
+            draft: false,
+            prerelease: false
+          });
+          
+          return release.data.upload_url;
 
     - name: Upload Release Asset
       uses: actions/github-script@v6

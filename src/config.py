@@ -22,7 +22,7 @@ DEFAULT_CONFIG = {
         'stock2': 'GOOGL',
         'stock3': 'MSFT',
         'stock4': 'AMZN',
-        'stock5': 'FB'
+        'stock5': 'TSLA'
     }
 
 }

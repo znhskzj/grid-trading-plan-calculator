@@ -8,3 +8,4 @@ pywin32-ctypes==0.2.2
 pytest==8.3.2
 configparser==7.0.0
 yfinance==0.2.41
+tqdm==4.66.5

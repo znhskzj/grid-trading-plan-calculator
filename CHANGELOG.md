@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2024-08-06
+
+### Added
+- Implemented automatic update checking mechanism
+- Added functionality to download and install updates automatically
+- Introduced version comparison utility for update management
+- Created centralized version.py file for improved version control
+
+### Changed
+- Updated GitHub Actions workflow to align with new version management approach
+- Enhanced error handling and logging in utility functions
+- Refactored version management to use the new version.py file
+- Improved configuration handling to support future user-specific settings
+
+### Fixed
+- Resolved issues with version comparison logic in GitHub Actions workflow
+- Corrected update URL construction for more reliable update downloads
+- Fixed potential conflicts between project and user configurations
+
+### Others
+- Improved exception handling in utility functions for better error tracking
+- Updated documentation (README.md and README-zh-CN.md) to reflect new automatic update feature and upcoming features
+- Enhanced modularity of version-related functions for easier maintenance
+- Prepared groundwork for future separation of project and user configurations
+
 ## [1.5.0] - 2024-08-05
 
 ### Added
