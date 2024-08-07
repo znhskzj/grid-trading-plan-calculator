@@ -1,9 +1,9 @@
 import logging
 import numpy as np
 from typing import Dict, List, Tuple
-from .utils import exception_handler
-# from .gui import App
-from .status_manager import StatusManager
+
+from src.utils import exception_handler
+from src.status_manager import StatusManager
 
 logger = logging.getLogger(__name__)
 
@@ -113,23 +113,32 @@ def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: floa
     return buy_plan, warning_message
 
 
-def run_calculation(input_values: Dict) -> str:
+def run_calculation(input_values: Dict[str, any]) -> str:
+    """执行计算购买计划"""
     StatusManager.update_status("开始计算购买计划...")
     buy_plan, warning_message = calculate_buy_plan(**input_values)
     StatusManager.update_status("计算完成，正在生成结果报告...")
     return format_results(input_values, buy_plan, warning_message)
 
 
-@exception_handler
-def calculate_with_reserve(input_values: Dict, reserve_percentage: float) -> str:
+def calculate_with_reserve(input_values: Dict[str, any], reserve_percentage: int) -> str:
+    """执行保留部分资金的计算"""
     StatusManager.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
-    funds = input_values['funds']
-    reserved_funds = funds * (reserve_percentage / 100)
-    available_funds = funds - reserved_funds
+    
+    # 计算保留的资金
+    total_funds = input_values['funds']
+    reserved_funds = total_funds * (reserve_percentage / 100)
+    available_funds = total_funds - reserved_funds
+    
+    # 更新输入值中的可用资金
     input_values['funds'] = available_funds
+    
+    # 调用原有的计算函数
     buy_plan, warning_message = calculate_buy_plan(**input_values)
+    
     StatusManager.update_status("计算完成，正在生成结果报告...")
-    return format_results(input_values, buy_plan, warning_message, reserved_funds)
+    result = format_results(input_values, buy_plan, warning_message, reserved_funds)
+    return result
 
 
 def format_results(

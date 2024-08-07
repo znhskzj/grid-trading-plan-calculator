@@ -1,8 +1,8 @@
 # 网格交易计划计算器
 
-版本：1.5.0
+版本：1.5.2
 作者：Rong Zhu
-日期：August 5, 2024
+日期：August 6, 2024
 
 ## 描述
 
@@ -19,6 +19,7 @@
 - 全面的日志记录，用于调试和审计
 - 用户友好的图形界面，布局直观
 - 自动更新检查和安装
+- 用户可以选择从 Yahoo Finance 或 Alpha Vantage 获取股票数据
 
 ## 项目结构
 
@@ -169,10 +170,13 @@ python grid_trading_plan.py
 6. 点击"计算购买计划"。
 7. 结果将显示140元到150元之间的5个价格级别，靠近150元的网格分配更多资金。
 8. 如果您对计划满意，点击"保存为CSV"导出它。
+9. 您现在可以选择使用 Yahoo Finance 或 Alpha Vantage 的 API 来获取股票数据。
+10. 您选择的 API 和常用股票现在会自动保存，以便在下次使用时恢复。
 
 ## 配置
 
 项目根目录中的 `config.ini` 文件包含默认设置和常用股票。您可以修改此文件来自定义应用程序的默认行为并添加或删除常用股票。
+config.ini 文件现在包含 API 设置。您可以选择使用 Yahoo Finance 或 Alpha Vantage 来获取股票价格数据。如果您选择 Alpha Vantage，则需要提供 API 密钥。
 
 ### 配置示例
 
@@ -192,6 +196,10 @@ stock2 = GOOGL
 stock3 = MSFT
 stock4 = AMZN
 stock5 = TSLA
+
+[API]
+choice = yahoo
+alpha_vantage_key = your_alpha_vantage_key_here
 ```
 
 ### 自定义方法：

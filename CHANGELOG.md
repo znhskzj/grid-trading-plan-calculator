@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.2] - 2024-08-06
+
+### Added
+- Integrated multi-API support, allowing switching between Yahoo Finance and Alpha Vantage
+- Implemented automatic fallback to alternative APIs, improving the success rate of stock price retrieval
+- Added functionality to save user API preferences and frequently used stock lists
+- Introduced automatic display of selected stock during calculations
+
+### Changed
+- Refactored the API management module, enhancing extensibility and stability
+- Optimized configuration loading and saving mechanisms, adding support for user-specific settings
+- Improved the layout for allocation method display, enhancing UI aesthetics
+- Enhanced information display in status bar and result area, providing clearer operational feedback
+- Restructured the project to better align with standard Python package structures
+
+### Fixed
+- Resolved issues with "Calculate with 10% Reserve" and "Calculate with 20% Reserve" functions
+- Fixed import errors when running calculations.py directly
+- Addressed potential Tkinter object access errors during program exit
+
+### Improved
+- Optimized the code structure of the calculation module, improving readability and maintainability
+- Enhanced error handling and logging capabilities for better issue diagnosis
+- Improved exception handling mechanisms, providing more detailed and useful error information
+- Optimized data processing and calculation procedures, increasing overall operational efficiency
+
+### Others
+- Updated code comments and docstrings, improving code readability
+- Added type hints to major functions and classes, enhancing code maintainability
+- Prepared foundational infrastructure for future feature expansions, such as real-time notifications and automatic order placement
+- Updated README documentation to reflect new features and improvements
+
+
 ## [1.5.1] - 2024-08-06
 
 ### Added

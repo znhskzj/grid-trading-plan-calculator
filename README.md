@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.5.0
+Version: 1.5.2
 Author: Rong Zhu
-Date: August 5, 2024
+Date: August 6, 2024
 
 ## Description
 
@@ -19,6 +19,7 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 - Comprehensive logging for debugging and auditing
 - User-friendly GUI with intuitive layout
 - Automatic update checking and installation
+- Users can now switch between Yahoo Finance and Alpha Vantage for stock data retrieval
 
 ## Project Structure
 
@@ -169,10 +170,13 @@ Let's say you want to create a grid trading plan for Apple (AAPL) stock:
 6. Click "Calculate Purchase Plan".
 7. The result will show you 5 price levels between $140 and $150, with more funds allocated to grids closer to $150.
 8. If you're satisfied with the plan, click "Save as CSV" to export it.
+9. API Selection: In the main window, you can now choose between Yahoo Finance and Alpha Vantage APIs for stock data retrieval.
+10. Saving Preferences: Your API choice and frequently used stocks are now automatically saved for future sessions.
 
 ## Configuration
 
 The `config.ini` file in the project root contains default settings and common stocks. You can modify this file to customize the application's default behavior and add or remove common stocks.
+The `config.ini` file now includes API settings. You can choose between Yahoo Finance and Alpha Vantage for stock price fetching. If you choose Alpha Vantage, you need to provide an API key.
 
 ### Example Configuration
 
@@ -193,6 +197,9 @@ stock3 = MSFT
 stock4 = AMZN
 stock5 = TSLA
 
+[API]
+choice = yahoo
+alpha_vantage_key = your_alpha_vantage_key_here
 ```
 ## Upcoming Features
 

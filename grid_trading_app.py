@@ -34,8 +34,8 @@ def main():
         logger.info("程序启动")
 
         # 首次运行时转换 JSON 配置到 INI
-        convert_json_to_ini()
-        logger.info("配置转换完成")
+        # convert_json_to_ini()
+        # logger.info("配置转换完成")
 
         config = load_config()
         logger.info("配置加载完成")
@@ -45,7 +45,7 @@ def main():
             raise KeyError("配置文件中缺少 'General' 部分")
 
         root = tk.Tk()
-        app = App(root, config, VERSION)  # 传递整个 config 字典
+        App(root, config, VERSION)
         logger.info("GUI 初始化完成")
 
         root.mainloop()

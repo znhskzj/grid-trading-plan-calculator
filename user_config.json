@@ -1,0 +1,13 @@
+{
+    "API": {
+        "choice": "yahoo"
+    },
+    "allocation_method": "1",
+    "common_stocks": [
+        "AAPL",
+        "GOOGL",
+        "UPST",
+        "TSLA",
+        "SOXL"
+    ]
+}

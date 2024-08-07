@@ -1,41 +1,65 @@
-import tkinter as tk
-from tkinter import messagebox, filedialog, scrolledtext
+# 标准库导入
 import csv
-from datetime import datetime
 import logging
 import os
-from .calculations import run_calculation, calculate_with_reserve
-from .config import load_config
-from .utils import exception_handler
-from .status_manager import StatusManager
-from src.utils import compare_versions, get_latest_version
-from unittest.mock import Mock
-import yfinance as yf
+from datetime import datetime
+from typing import Dict, Any
+
+# 第三方库导入
+import tkinter as tk
+from tkinter import messagebox, filedialog, scrolledtext, simpledialog
+
+# 本地模块导入
+from src.api_manager import APIManager
+from src.calculations import run_calculation, calculate_with_reserve
+from src.config import save_user_config, load_user_config
+from src.status_manager import StatusManager
+from src.utils import exception_handler, compare_versions, get_latest_version
 
 logger = logging.getLogger(__name__)
 
-
-def get_project_root():
+def get_project_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
 class App:
-    def __init__(self, master, config, version):
-        if master is None:
-            master = tk.Tk()
-        self.master = master
+    """
+    Grid Trading Tool 的主应用类。
+    管理GUI界面和用户交互。
+    """
+
+    def __init__(self, master: tk.Tk, config: Dict[str, Any], version: str):
+        """
+        初始化应用。
+
+        :param master: Tkinter 主窗口
+        :param config: 应用配置
+        :param version: 应用版本
+        """
+        self.master = master or tk.Tk()
         self.config = config
         self.version = version
         self.current_symbol = None
         self.status_bar = None
         self.master.title(f"Grid Trading Tool v{self.version}")
+
+        self.user_config = load_user_config()
+        self.available_apis = config['AvailableAPIs']['apis']
+        self.api_choice = tk.StringVar(value=config['API']['choice'])
+        self.alpha_vantage_key = tk.StringVar(value=config['API']['alpha_vantage_key'])
         self.setup_variables()
         self.create_widgets()
+        self.create_api_widgets()
         self.setup_layout()
+        self.load_user_settings()
+
+        self.api_manager = APIManager(self.api_choice.get(), self.alpha_vantage_key.get())
+        
         App.instance = self
         StatusManager.set_instance(self)
+        self.is_closing = False
 
-    def setup_variables(self):
+    def setup_variables(self) -> None:
+        """设置GUI变量"""
         general_config = self.config['General']
         self.funds_var = tk.StringVar(value=general_config.get('funds', '0'))
         self.initial_price_var = tk.StringVar(value=general_config['initial_price'])
@@ -43,160 +67,162 @@ class App:
         self.num_grids_var = tk.StringVar(value=general_config['num_grids'])
         self.allocation_method_var = tk.StringVar(value=general_config['allocation_method'])
 
-    def create_widgets(self):
+    def create_widgets(self) -> None:
+        """创建并布局所有GUI组件"""
         try:
-            # 创建主框架
-            self.main_frame = tk.Frame(self.master)
-            self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-            # 创建状态栏
-            self.status_bar = tk.Label(self.master, text="就绪", bd=1, relief=tk.SUNKEN, anchor=tk.W)
-            self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-            # 创建左侧框架
-            self.left_frame = tk.Frame(self.main_frame, width=120)
-            self.left_frame.grid(row=0, column=0, sticky="ns")
-            self.left_frame.grid_propagate(False)  # 固定左侧框架大小
-
-            # 创建右侧框架
-            self.right_frame = tk.Frame(self.main_frame)
-            self.right_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-
-            # 设置列权重，使右侧框架能够扩展
-            self.main_frame.grid_columnconfigure(1, weight=1)
-
-            self.create_left_widgets()
-            self.create_right_widgets()
-
-            # 创建结果显示区域
-            self.result_frame = tk.Frame(self.main_frame)
-            self.result_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
-
-            self.result_text = scrolledtext.ScrolledText(self.result_frame, height=15, width=50)
-            self.result_text.pack(fill=tk.BOTH, expand=True)
-
+            self.create_main_frame()
+            self.create_status_bar()
+            self.create_left_frame()
+            self.create_right_frame()
+            self.create_result_frame()
         except Exception as e:
-            print(f"创建 GUI 组件时发生错误: {str(e)}")
-            logging.error(f"创建 GUI 组件时发生错误: {str(e)}", exc_info=True)
+            logger.error(f"创建 GUI 组件时发生错误: {str(e)}", exc_info=True)
+            messagebox.showerror("错误", f"创建 GUI 组件时发生错误: {str(e)}")
 
-    def create_left_widgets(self):
-        # 常用标的按钮
+    def create_main_frame(self) -> None:
+        """创建主框架"""
+        self.main_frame = tk.Frame(self.master)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.main_frame.grid_columnconfigure(1, weight=1)
+
+    def create_status_bar(self) -> None:
+        """创建状态栏"""
+        self.status_bar = tk.Label(self.master, text="就绪", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def create_left_frame(self) -> None:
+        """创建左侧框架"""
+        self.left_frame = tk.Frame(self.main_frame, width=120)
+        self.left_frame.grid(row=0, column=0, sticky="ns")
+        self.left_frame.grid_propagate(False)
+        self.create_left_widgets()
+
+    def create_right_frame(self) -> None:
+        """创建右侧框架"""
+        self.right_frame = tk.Frame(self.main_frame)
+        self.right_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        self.right_frame.grid_columnconfigure(1, weight=1)
+        self.create_right_widgets()
+
+    def create_result_frame(self) -> None:
+        """创建结果显示区域"""
+        self.result_frame = tk.Frame(self.main_frame)
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        self.result_text = scrolledtext.ScrolledText(self.result_frame, height=15, width=50)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
+
+    def create_left_widgets(self) -> None:
+        """创建左侧组件"""
         self.common_stocks_button = tk.Button(self.left_frame, text="常用标的", width=10, command=self.show_common_stocks)
         self.common_stocks_button.pack(pady=(0, 5))
 
-        # 股票标的按钮
         stocks = self.config.get('CommonStocks', {})
         for symbol in stocks.values():
-            btn = tk.Button(self.left_frame, text=symbol, width=10, command=lambda s=symbol: self.set_stock_price(s))
+            btn = tk.Button(self.left_frame, text=symbol, width=10,
+                            command=lambda s=symbol: self.set_stock_price(s))
             btn.pack(pady=2)
 
-    def create_right_widgets(self):
-        try:
-            # 设置右侧框架的列权重
-            self.right_frame.grid_columnconfigure(1, weight=1)
+    def create_right_widgets(self) -> None:
+        """创建右侧组件"""
+        self.create_input_fields()
+        self.create_allocation_method_widgets()
+        self.create_buttons()
 
-            # 输入字段
-            labels = ["可用资金:", "初始价格:", "止损价格:", "网格数量:"]
-            vars = [self.funds_var, self.initial_price_var, self.stop_loss_price_var, self.num_grids_var]
+    def create_input_fields(self) -> None:
+        """创建输入字段"""
+        labels = ["可用资金:", "初始价格:", "止损价格:", "网格数量:"]
+        vars = [self.funds_var, self.initial_price_var, self.stop_loss_price_var, self.num_grids_var]
 
-            for i, (label, var) in enumerate(zip(labels, vars)):
-                tk.Label(self.right_frame, text=label).grid(row=i, column=0, sticky="e", pady=2)
-                entry = tk.Entry(self.right_frame, textvariable=var, width=20)
-                entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
+        for i, (label, var) in enumerate(zip(labels, vars)):
+            tk.Label(self.right_frame, text=label).grid(row=i, column=0, sticky="e", pady=2)
+            entry = tk.Entry(self.right_frame, textvariable=var, width=20)
+            entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
 
-            # 分配方式
-            tk.Label(self.right_frame, text="分配方式:").grid(row=4, column=0, sticky="e", pady=2)
-            methods = [("等金额分配", "0", "均匀分配资金"),
-                       ("等比例分配", "1", "指数增长分配"),
-                       ("线性加权", "2", "线性增长分配")]
+    def create_allocation_method_widgets(self) -> None:
+        """创建分配方式组件"""
+        tk.Label(self.right_frame, text="分配方式:").grid(row=4, column=0, sticky="e", pady=2)
+        methods = [("等金额分配", "0", "均匀分配资金"),
+                ("等比例分配", "1", "指数增长分配"),
+                ("线性加权", "2", "线性增长分配")]
 
-            for i, (text, value, desc) in enumerate(methods):
-                tk.Radiobutton(self.right_frame, text=text, variable=self.allocation_method_var,
-                               value=value).grid(row=4+i, column=1, sticky="w")
-                tk.Label(self.right_frame, text=desc).grid(row=4+i, column=1, sticky="e")
+        for i, (text, value, desc) in enumerate(methods):
+            frame = tk.Frame(self.right_frame)
+            frame.grid(row=4+i, column=1, sticky="w")
+            rb = tk.Radiobutton(frame, text=text, variable=self.allocation_method_var, value=value)
+            rb.pack(side=tk.LEFT)
+            tk.Label(frame, text=desc).pack(side=tk.LEFT, padx=(10, 0))
 
-            # 按钮
-            button_frame = tk.Frame(self.right_frame)
-            button_frame.grid(row=7, column=0, columnspan=2, pady=10)
+    def create_buttons(self) -> None:
+        """创建按钮"""
+        button_frame = tk.Frame(self.right_frame)
+        button_frame.grid(row=8, column=0, columnspan=2, pady=10)
 
-            buttons = [
-                ("计算购买计划", self.run_calculation),
-                ("保留10%计算", lambda: self.calculate_with_reserve(10)),
-                ("保留20%计算", lambda: self.calculate_with_reserve(20)),
-                ("保存为CSV", self.save_to_csv),
-                ("重置为默认值", self.reset_to_default)
-            ]
+        buttons = [
+            ("计算购买计划", self.run_calculation),
+            ("保留10%计算", lambda: self.calculate_with_reserve(10)),
+            ("保留20%计算", lambda: self.calculate_with_reserve(20)),
+            ("保存为CSV", self.save_to_csv),
+            ("重置为默认值", self.reset_to_default)
+        ]
 
-            for i, (text, command) in enumerate(buttons):
-                tk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=5)
+        for i, (text, command) in enumerate(buttons):
+            tk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=5)
 
-            # 第二行按钮
-            second_row_buttons = [
-                ("查询可用资金", self.query_available_funds),
-                ("开启实时通知", self.enable_real_time_notifications),
-                ("按标的计划下单", self.place_order_by_plan),
-                ("导出成交明细", self.export_transaction_details),
-                ("计算总体利润", self.calculate_total_profit)
-            ]
+        self.create_second_row_buttons(button_frame)
 
-            for i, (text, command) in enumerate(second_row_buttons):
-                tk.Button(
-                    button_frame, text=text, command=command, state='disabled').grid(
-                    row=1, column=i, padx=5, pady=(5, 0))
+    def create_second_row_buttons(self, button_frame: tk.Frame) -> None:
+        """创建第二行按钮"""
+        second_row_buttons = [
+            ("查询可用资金", self.query_available_funds),
+            ("开启实时通知", self.enable_real_time_notifications),
+            ("按标的计划下单", self.place_order_by_plan),
+            ("导出成交明细", self.export_transaction_details),
+            ("计算总体利润", self.calculate_total_profit)
+        ]
 
-        except Exception as e:
-            self.update_status(f"创建右侧 GUI 组件时出错: {str(e)}")
-            logging.error(f"创建右侧 GUI 组件时出错: {str(e)}", exc_info=True)
-
-    # 添加这些方法的占位符
-    def enable_real_time_notifications(self):
-        self.update_status("实时通知功能尚未实现")
-
-    def query_available_funds(self):
-        self.update_status("查询可用资金功能尚未实现")
-
-    def place_order_by_plan(self):
-        self.update_status("按计划下单功能尚未实现")
-
-    def export_transaction_details(self):
-        self.update_status("导出成交明细功能尚未实现")
-
-    def calculate_total_profit(self):
-        self.update_status("计算总体利润功能尚未实现")
-
-    def place_grid_order(self):
-        self.update_status("按网格计划下单功能尚未实现")
-
-    def update_status(self, message):
-        if self.status_bar:
-            self.status_bar.config(text=message)
+        for i, (text, command) in enumerate(second_row_buttons):
+            tk.Button(button_frame, text=text, command=command, state='disabled').grid(
+                row=1, column=i, padx=5, pady=(5, 0))
+            
+    @exception_handler
+    def run_calculation(self) -> None:
+        """执行计算购买计划"""
+        input_values = self.get_input_values()
+        
+        if self.current_symbol:
+            symbol_info = f"标的: {self.current_symbol}"
+            self.update_status(f"开始计算购买计划 ({symbol_info})...")
+            result = run_calculation(input_values)  # 直接传递字典
+            self.display_results(f"{symbol_info}\n\n{result}")
         else:
-            print(f"Status: {message}")  # 如果状态栏还未创建，则打印到控制台
-
-    def setup_layout(self):
-        self.master.grid_columnconfigure(1, weight=1)
-        self.master.grid_rowconfigure(0, weight=1)
-        self.right_frame.grid_columnconfigure(1, weight=1)
-        for i in range(10):
-            self.right_frame.grid_rowconfigure(i, weight=1)
+            self.update_status("开始计算购买计划...")
+            result = run_calculation(input_values)  # 直接传递字典
+            self.display_results(result)
+        
+        self.update_status("计算完成")
 
     @exception_handler
-    def run_calculation(self):
-        symbol_info = f"标的: {self.current_symbol}" if hasattr(self, 'current_symbol') else "未选择特定标的"
-        self.update_status(f"开始计算购买计划 ({symbol_info})...")
-        result = run_calculation(self.get_input_values())
-        self.display_results(f"{symbol_info}\n\n{result}")
-        self.update_status(f"计算完成 ({symbol_info})")
+    def calculate_with_reserve(self, reserve_percentage: int) -> None:
+        """执行保留部分资金的计算"""
+        input_values = self.get_input_values()
+        
+        if self.current_symbol:
+            symbol_info = f"标的: {self.current_symbol}"
+            self.update_status(f"开始计算（保留{reserve_percentage}%资金）({symbol_info})...")
+        else:
+            self.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
+        
+        result = calculate_with_reserve(input_values, reserve_percentage)
+        
+        if self.current_symbol:
+            self.display_results(f"{symbol_info}\n\n{result}")
+        else:
+            self.display_results(result)
+        
+        self.update_status(f"计算完成（保留{reserve_percentage}%资金）")
 
-    @exception_handler
-    def calculate_with_reserve(self, reserve_percentage):
-        symbol_info = f"标的: {self.current_symbol}" if hasattr(self, 'current_symbol') else "未选择特定标的"
-        self.update_status(f"开始计算（保留{reserve_percentage}%资金）({symbol_info})...")
-        result = calculate_with_reserve(self.get_input_values(), reserve_percentage)
-        self.display_results(f"{symbol_info}\n\n{result}")
-        self.update_status(f"计算完成（保留{reserve_percentage}%资金）({symbol_info})")
-
-    def get_input_values(self):
+    def get_input_values(self) -> Dict[str, Any]:
+        """获取输入值"""
         return {
             'funds': float(self.funds_var.get()),
             'initial_price': float(self.initial_price_var.get()),
@@ -205,11 +231,13 @@ class App:
             'allocation_method': int(self.allocation_method_var.get())
         }
 
-    def display_results(self, result):
+    def display_results(self, result: str) -> None:
+        """显示计算结果"""
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, result)
 
-    def save_to_csv(self):
+    def save_to_csv(self) -> None:
+        """保存结果为CSV文件"""
         logger.info("用户尝试保存结果为 CSV")
         try:
             content = self.result_text.get(1.0, tk.END)
@@ -218,49 +246,176 @@ class App:
                 logger.warning("尝试保存空结果")
                 return
 
-            default_filename = f"grid_trading_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            initial_dir = os.path.join(get_project_root(), 'output')  # 假设我们有一个 output 目录
-            os.makedirs(initial_dir, exist_ok=True)  # 确保 output 目录存在
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".csv",
-                filetypes=[("CSV files", "*.csv")],
-                initialfile=default_filename,
-                initialdir=initial_dir
-            )
+            file_path = self._get_save_file_path()
             if not file_path:
                 logger.info("用户取消了保存操作")
                 return
 
-            with open(file_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
-                writer = csv.writer(csvfile)
-                lines = content.split('\n')
-                for line in lines:
-                    if line.strip():
-                        if ':' in line:
-                            key, value = line.split(':', 1)
-                            writer.writerow([key.strip(), value.strip()])
-                        else:
-                            writer.writerow([line.strip()])
-
+            self._write_csv_file(file_path, content)
             logger.info(f"结果已保存到 {file_path}")
             messagebox.showinfo("成功", f"结果已保存到 {file_path}")
         except Exception as e:
             logger.exception("保存文件时发生错误")
             messagebox.showerror("错误", f"保存文件时发生错误: {str(e)}")
 
-    def reset_to_default(self):
+    def _get_save_file_path(self) -> str:
+        """获取保存文件路径"""
+        default_filename = f"grid_trading_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        initial_dir = os.path.join(get_project_root(), 'output')
+        os.makedirs(initial_dir, exist_ok=True)
+        return filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv")],
+            initialfile=default_filename,
+            initialdir=initial_dir
+        )
+
+    def _write_csv_file(self, file_path: str, content: str) -> None:
+        """写入CSV文件"""
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
+            writer = csv.writer(csvfile)
+            for line in content.split('\n'):
+                if line.strip():
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        writer.writerow([key.strip(), value.strip()])
+                    else:
+                        writer.writerow([line.strip()])
+
+    def reset_to_default(self) -> None:
+        """重置所有设置到默认状态"""
         logger.info("用户重置为默认值")
-        config_path = os.path.join(get_project_root(), 'config.ini')
-        config = load_config(config_path)
-        general_config = config.get('General', {})
-        self.funds_var.set(str(general_config.get('funds', '')))
-        self.initial_price_var.set(str(general_config.get('initial_price', '')))
-        self.stop_loss_price_var.set(str(general_config.get('stop_loss_price', '')))
-        self.num_grids_var.set(str(general_config.get('num_grids', '')))
-        self.allocation_method_var.set(str(general_config.get('allocation_method', '')))
+        self.api_choice.set('yahoo')
+        self.allocation_method_var.set(self.config['General']['allocation_method'])
+        self.funds_var.set(self.config['General']['funds'])
+        self.initial_price_var.set(self.config['General']['initial_price'])
+        self.stop_loss_price_var.set(self.config['General']['stop_loss_price'])
+        self.num_grids_var.set(self.config['General']['num_grids'])
+        self.update_common_stocks(self.config.get('CommonStocks', {}).values())
+        self.user_config = {}
+        self.current_symbol = None  # 重置当前选中的标的
+        self.save_user_settings()
+        reset_message = "所有设置已重置为默认值"
+        self.update_status(reset_message)
+        self.display_results(reset_message)
+
+    def create_api_widgets(self) -> None:
+        """创建API选择组件"""
+        api_frame = tk.Frame(self.right_frame)
+        api_frame.grid(row=7, column=1, sticky="e", pady=5)
+
+        tk.Label(api_frame, text="API 选择:").pack(side=tk.LEFT)
+        for api in self.available_apis:
+            tk.Radiobutton(api_frame, text=api.capitalize(), variable=self.api_choice, 
+                        value=api, command=self.on_api_change).pack(side=tk.LEFT)
+
+    def on_api_change(self) -> None:
+        """API选择变更处理"""
+        if self.api_choice.get() == 'alpha_vantage' and not self.alpha_vantage_key.get():
+            self.prompt_for_alpha_vantage_key()
+        
+        # 只有在 API 真正改变时才更新
+        if self.api_manager.api_choice != self.api_choice.get() or \
+           (self.api_choice.get() == 'alpha_vantage' and 
+            self.api_manager.alpha_vantage_key != self.alpha_vantage_key.get()):
+            self.api_manager = APIManager(self.api_choice.get(), self.alpha_vantage_key.get())
+            self.save_user_settings()
+            self.update_status(f"已切换到 {self.api_choice.get()} API")
+
+    def prompt_for_alpha_vantage_key(self) -> None:
+        """提示输入Alpha Vantage API密钥"""
+        new_key = simpledialog.askstring("Alpha Vantage API Key", 
+                                         "请输入您的 Alpha Vantage API Key:", 
+                                         initialvalue=self.alpha_vantage_key.get())
+        if new_key:
+            self.alpha_vantage_key.set(new_key)
+            self.user_config.setdefault('API', {})['alpha_vantage_key'] = new_key
+            self.save_user_settings()
+        elif not self.alpha_vantage_key.get():
+            # 如果用户取消输入且之前没有设置key，切换回Yahoo
+            self.api_choice.set('yahoo')
+            messagebox.showinfo("API 选择", "由于未提供 Alpha Vantage API Key，已切换回 Yahoo Finance API。")
+
+
+    def save_user_settings(self) -> None:
+        """保存用户设置"""
+        if self.is_closing:
+            return
+        self.user_config['API'] = {
+            'choice': self.api_choice.get(),
+        }
+        if self.api_choice.get() == 'alpha_vantage':
+            self.user_config['API']['alpha_vantage_key'] = self.user_config.get('API', {}).get('alpha_vantage_key', '')
+        
+        self.user_config['allocation_method'] = self.allocation_method_var.get()
+        self.user_config['common_stocks'] = [btn['text'] for btn in self.left_frame.winfo_children() if isinstance(btn, tk.Button) and btn != self.common_stocks_button]
+        
+        save_user_config(self.user_config)
+        logger.info("用户设置已自动保存")
+
+    def load_user_settings(self) -> None:
+        """加载用户设置"""
+        if 'API' in self.user_config:
+            self.api_choice.set(self.user_config['API'].get('choice', 'yahoo'))
+            self.alpha_vantage_key.set(self.user_config['API'].get('alpha_vantage_key', ''))
+        if 'allocation_method' in self.user_config:
+            self.allocation_method_var.set(self.user_config['allocation_method'])
+        if 'common_stocks' in self.user_config:
+            self.update_common_stocks(self.user_config['common_stocks'])
+        
+        # 如果选择了 Alpha Vantage 但没有 API key，提示用户输入
+        if self.api_choice.get() == 'alpha_vantage' and not self.alpha_vantage_key.get():
+            self.prompt_for_alpha_vantage_key()
+
+    def update_common_stocks(self, stocks: list[str]) -> None:
+        """更新常用股票列表"""
+        for widget in self.left_frame.winfo_children():
+            if widget != self.common_stocks_button:
+                widget.destroy()
+        
+        for symbol in stocks:
+            btn = tk.Button(self.left_frame, text=symbol, width=10,
+                            command=lambda s=symbol: self.set_stock_price(s))
+            btn.pack(pady=2)
+
+    def set_stock_price(self, symbol: str) -> None:
+        """设置股票价格"""
+        for api in self.available_apis:
+            try:
+                self.api_choice.set(api)
+                self.api_manager = APIManager(api, self.alpha_vantage_key.get())
+                current_price, api_used = self.api_manager.get_stock_price(symbol)
+                if current_price:
+                    self.initial_price_var.set(str(current_price))
+                    self.current_symbol = symbol
+                    status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
+                    self.update_status(status_message)
+                    self.display_results(f"选中标的: {symbol}\n当前价格: {current_price:.2f} 元 (来自 {api_used})\n\n初始价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。")
+                    return
+            except Exception as e:
+                logger.error(f"使用 {api} 获取股票 {symbol} 的价格失败: {str(e)}")
+        
+        error_message = f"无法获取股票 {symbol} 的价格"
+        self.update_status(error_message)
+        self.display_results(f"无法获取标的 {symbol} 的价格\n\n已尝试所有可用的API。请检查网络连接或标的代码是否正确。")
+        logger.error(error_message)
+        self.current_symbol = None
+        
+    def update_status(self, message: str) -> None:
+        """更新状态栏信息"""
+        if self.status_bar:
+            self.status_bar.config(text=message)
+        else:
+            print(f"Status: {message}")  # 如果状态栏还未创建，则打印到控制台
+
+    def __del__(self) -> None:
+        """析构函数，确保在程序退出时保存设置"""
+        self.is_closing = True
+        self.save_user_settings()
 
     @staticmethod
-    def validate_float_input(action, value_if_allowed):
+    def validate_float_input(action: str, value_if_allowed: str) -> bool:
+        """验证输入是否为有效的浮点数"""
         if action == '1':  # insert
             if value_if_allowed == "":
                 return True
@@ -272,7 +427,8 @@ class App:
         return True
 
     @staticmethod
-    def validate_int_input(action, value_if_allowed):
+    def validate_int_input(action: str, value_if_allowed: str) -> bool:
+        """验证输入是否为有效的整数"""
         if action == '1':  # insert
             if value_if_allowed == "":
                 return True
@@ -283,59 +439,46 @@ class App:
                 return False
         return True
 
-    def show_common_stocks(self):
-        # 清除所有现有的股票按钮
-        if not isinstance(self.left_frame, Mock):
+    def show_common_stocks(self) -> None:
+        """显示或隐藏常用股票列表"""
+        if self.common_stocks_button['text'] == "隐藏常用标的":
+            self.common_stocks_button['text'] = "常用标的"
             for widget in self.left_frame.winfo_children():
                 if widget != self.common_stocks_button:
                     widget.destroy()
-
-        if self.common_stocks_button['text'] == "隐藏常用标的":
-            # 如果是隐藏操作，只需要更改按钮文本
-            self.common_stocks_button['text'] = "常用标的"
         else:
-            # 显示常用标的按钮
             stocks = self.config.get('CommonStocks', {})
             for symbol in stocks.values():
-                if not isinstance(self.left_frame, Mock):
-                    try:
-                        btn = tk.Button(self.left_frame, text=symbol, width=10,
-                                        command=lambda s=symbol: self.set_stock_price(s))
-                        btn.pack(pady=2)
-                    except Exception as e:
-                        print(f"无法创建按钮 {symbol}: {str(e)}")
+                btn = tk.Button(self.left_frame, text=symbol, width=10,
+                                command=lambda s=symbol: self.set_stock_price(s))
+                btn.pack(pady=2)
             self.common_stocks_button['text'] = "隐藏常用标的"
+        
+        self.left_frame.update()
 
-        # 更新左侧框架
-        if not isinstance(self.left_frame, Mock):
-            self.left_frame.update()
+    def query_available_funds(self) -> None:
+        """查询可用资金（待实现）"""
+        self.update_status("查询可用资金功能尚未实现")
 
-    def set_stock_price(self, symbol):
-        try:
-            stock = yf.Ticker(symbol)
-            current_price = stock.info.get('regularMarketPrice') or stock.info.get('currentPrice')
-            if current_price:
-                self.initial_price_var.set(str(current_price))
-                status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元"
-                self.update_status(status_message)
-                self.display_results(f"选中标的: {symbol}\n当前价格: {current_price:.2f} 元\n\n请点击\"计算购买计划\"按钮生成网格交易计划。")
-            else:
-                raise ValueError("无法获取股票价格")
-        except Exception as e:
-            error_message = f"无法获取股票 {symbol} 的价格: {str(e)}"
-            self.update_status(error_message)
-            self.display_results(f"无法获取标的 {symbol} 的价格\n\n请选择其他标的或手动输入初始价格。")
-            logging.error(error_message)
+    def enable_real_time_notifications(self) -> None:
+        """启用实时通知（待实现）"""
+        self.update_status("实时通知功能尚未实现")
 
-        # 保存当前选中的标的
-        self.current_symbol = symbol
+    def place_order_by_plan(self) -> None:
+        """按计划下单（待实现）"""
+        self.update_status("按计划下单功能尚未实现")
 
-    def query_available_funds(self):
-        # 这里添加查询可用资金的逻辑
-        pass
+    def export_transaction_details(self) -> None:
+        """导出交易明细（待实现）"""
+        self.update_status("导出成交明细功能尚未实现")
 
-    def check_for_updates(self):
-        current_version = "1.5.0"  # 从 version.py 中获取
+    def calculate_total_profit(self) -> None:
+        """计算总体利润（待实现）"""
+        self.update_status("计算总体利润功能尚未实现")
+
+    def check_for_updates(self) -> None:
+        """检查更新"""
+        current_version = self.version
         latest_version = get_latest_version()
         
         if latest_version and compare_versions(current_version, latest_version):
@@ -345,7 +488,16 @@ class App:
             )
             if response:
                 self.start_update(latest_version)
-    
-    def start_update(self, version):
+
+    def start_update(self, version: str) -> None:
+        """开始更新过程（待实现）"""
         # 实现更新逻辑
         pass
+
+    def setup_layout(self) -> None:
+        """设置主窗口布局"""
+        self.master.grid_columnconfigure(1, weight=1)
+        self.master.grid_rowconfigure(0, weight=1)
+        self.right_frame.grid_columnconfigure(1, weight=1)
+        for i in range(10):
+            self.right_frame.grid_rowconfigure(i, weight=1)
