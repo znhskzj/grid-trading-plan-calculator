@@ -9,8 +9,7 @@ from typing import Dict, Any
 
 import tkinter as tk
 from tkinter import messagebox, filedialog, scrolledtext, simpledialog
-
-from src.api_manager import APIManager
+from src.api_manager import AlphaVantageError, APIManager
 from src.calculations import (
     calculate_buy_plan, 
     run_calculation, 
@@ -424,32 +423,39 @@ class App:
                             command=lambda s=symbol: self.set_stock_price(s))
             btn.pack(pady=2)
 
+
     def set_stock_price(self, symbol: str) -> None:
         api = self.api_choice.get()
+        error_message = None
         try:
-            self.api_manager = APIManager(api, self.alpha_vantage_key.get())
             current_price, api_used = self.api_manager.get_stock_price(symbol)
-            if current_price:
-                current_price = round(current_price, 2)  # 将价格四舍五入到两位小数
-                stop_loss_price = round(current_price * 0.9, 2)
-                self.initial_price_var.set(f"{current_price:.2f}")  # 使用字符串格式化确保显示两位小数
-                self.stop_loss_price_var.set(f"{stop_loss_price:.2f}")
-                self.current_symbol = symbol
-                status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
-                self.update_status(status_message)
-                self.display_results(
-                    f"选中标的: {symbol}\n"
-                    f"当前价格: {current_price:.2f} 元 (来自 {api_used})\n"
-                    f"止损价格: {stop_loss_price:.2f} 元 (按90%当前价格计算)\n\n"
-                    f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
-                )
-            else:
+            if not current_price:
                 raise ValueError(f"无法从 {api_used} 获取有效的价格数据")
-        except Exception as e:
-            error_message = f"使用 {api} 获取股票 {symbol} 的价格失败: {str(e)}"
+            
+            current_price = round(current_price, 2)
+            stop_loss_price = round(current_price * 0.9, 2)
+            self.initial_price_var.set(f"{current_price:.2f}")
+            self.stop_loss_price_var.set(f"{stop_loss_price:.2f}")
+            self.current_symbol = symbol
+            status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
+            self.update_status(status_message)
+            self.display_results(
+                f"选中标的: {symbol}\n"
+                f"当前价格: {current_price:.2f} 元 (来自 {api_used})\n"
+                f"止损价格: {stop_loss_price:.2f} 元 (按90%当前价格计算)\n\n"
+                f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
+            )
+        except (AlphaVantageError, ValueError) as e:
+            error_message = f"{api} API 错误: {str(e)}"
             self.update_status(error_message)
-            self.display_results(f"无法获取标的 {symbol} 的价格\n\n错误信息: {error_message}\n\n请检查网络连接、API key 是否有效，或者股票代码是否正确。")
-            logger.error(error_message, exc_info=True)
+            self.display_results(f"无法获取标的 {symbol} 的价格\n\n错误信息: {error_message}\n\n建议检查网络连接、API key 是否有效，或尝试切换到其他 API。")
+        except Exception as e:
+            error_message = f"获取股票 {symbol} 的价格时发生未知错误: {str(e)}"
+            self.update_status(error_message)
+            self.display_results(f"无法获取标的 {symbol} 的价格\n\n错误信息: {error_message}\n\n请联系技术支持。")
+        
+        if error_message:
+            logger.error(error_message)
         
         self.current_symbol = symbol  # 即使获取价格失败，也设置当前标的
         

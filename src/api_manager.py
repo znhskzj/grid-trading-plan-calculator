@@ -38,8 +38,7 @@ class APIManager:
             ts = self._get_alpha_vantage_ts()
             data, _ = ts.get_quote_endpoint(symbol)
             if data and '05. price' in data:
-                price = round(float(data['05. price']), 2)  # 四舍五入到两位小数
-                return price, 'Alpha Vantage'
+                return float(data['05. price']), 'Alpha Vantage'
             else:
                 raise ValueError(f"Alpha Vantage 未返回 {symbol} 的有效价格数据")
         except Exception as e:
@@ -47,7 +46,7 @@ class APIManager:
             if "Thank you for using Alpha Vantage!" in error_msg:
                 error_msg = "已达到 Alpha Vantage API 的每日请求限制。请稍后再试或切换到其他 API。"
             logger.error(f"从Alpha Vantage获取价格时发生错误: {error_msg}")
-            raise ValueError(f"Alpha Vantage 无法获取 {symbol} 的价格: {error_msg}")
+            raise AlphaVantageError(f"无法获取 {symbol} 的价格: {error_msg}")
 
     def _get_alpha_vantage_ts(self):
         if self.alpha_vantage_ts is None:
@@ -58,3 +57,7 @@ class APIManager:
                 logger.error("无法导入 alpha_vantage 库。请确保已安装该库。")
                 raise ImportError("alpha_vantage 库未安装。请使用 'pip install alpha_vantage' 安装。")
         return self.alpha_vantage_ts
+
+
+class AlphaVantageError(Exception):
+    pass
