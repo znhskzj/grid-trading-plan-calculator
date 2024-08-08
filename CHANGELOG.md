@@ -1,6 +1,42 @@
-# Changelog
+# Changelog.md
 
 All notable changes to this project will be documented in this file.
+
+## [1.5.3] - 2024-08-07
+
+### Added
+- Implemented trade instruction parsing functionality, supporting multiple formats of instruction input.
+- Added a new trade instruction input field in the GUI for easier input of trading instructions.
+- Added price tolerance checks, providing warnings when there is a significant difference between instruction price and actual price.
+- Introduced automatic stop-loss price adjustment, ensuring the stop-loss price is always below the current price.
+- Added a fallback solution using the instruction price when the API price is unavailable.
+
+### Changed
+- Refactored the `parse_trading_instruction` function, improving the accuracy and flexibility of instruction parsing.
+- Optimized the `process_instruction` method, enhancing error handling and user feedback.
+- Adjusted the price display format to clearly indicate the source of the price and the stop-loss price calculation method.
+- Improved the instruction input handling logic in the GUI, enhancing user experience.
+- Updated `config.py` to optimize configuration loading and saving processes.
+
+### Fixed
+- Resolved an issue where the stop-loss price being higher than the initial price caused validation failure in some cases.
+- Fixed a crash issue when the program could not retrieve the price of specific stocks (e.g., SOXL).
+- Addressed the issue of instruction parsing not matching the actual price.
+- Fixed the problem of duplicate display of common stocks in the GUI.
+
+### Improved
+- Enhanced error logging, providing more detailed fault diagnostic information.
+- Optimized the exception handling process when API price retrieval fails.
+- Improved user interface feedback, providing clearer information when processing complex instructions.
+- Enhanced `build_exe.py` script to include version number in the executable file name.
+
+### Others
+- Updated test cases to cover more instruction parsing scenarios.
+- Improved code comments, enhancing code readability and maintainability.
+- Updated user documentation, adding instructions for the new trade instruction features.
+- Updated GitHub Actions workflow to ensure consistency with local build process.
+- Updated `requirements.txt` to include all necessary dependencies for the project.
+
 
 ## [1.5.2] - 2024-08-06
 

@@ -1,8 +1,8 @@
 # Grid Trading Plan Calculator
 
-Version: 1.5.2
-Author: Rong Zhu
-Date: August 6, 2024
+Version: [VERSION]
+Author: [AUTHOR]
+Date: [DATE]
 
 ## Description
 
@@ -20,6 +20,9 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 - User-friendly GUI with intuitive layout
 - Automatic update checking and installation
 - Users can now switch between Yahoo Finance and Alpha Vantage for stock data retrieval
+- Trading instruction parsing for quick and flexible plan generation
+- Automatic adjustment of stop-loss prices to ensure they are below current prices
+- Price tolerance checking to warn users of significant price discrepancies
 
 ## Project Structure
 
@@ -172,6 +175,19 @@ Let's say you want to create a grid trading plan for Apple (AAPL) stock:
 8. If you're satisfied with the plan, click "Save as CSV" to export it.
 9. API Selection: In the main window, you can now choose between Yahoo Finance and Alpha Vantage APIs for stock data retrieval.
 10. Saving Preferences: Your API choice and frequently used stocks are now automatically saved for future sessions.
+
+### Example Usage with Trading Instruction
+
+Let's say you want to create a grid trading plan for SOXL stock based on a trading instruction:
+
+1. Launch the application.
+2. In the "Trading Instruction" field, enter: "日内SOXL 现价到30之间分批入，压力31.5，止损29.5"
+3. Click "Calculate Purchase Plan".
+4. The application will parse the instruction, fetch the current price if available, and generate a plan based on the instruction.
+5. The result will show you the parsed information, including the stock symbol, price range, and stop-loss price.
+6. If there are any discrepancies between the instruction and current market prices, you'll see a warning.
+7. The grid trading plan will be generated based on this information.
+8. If you're satisfied with the plan, click "Save as CSV" to export it.
 
 ## Configuration
 

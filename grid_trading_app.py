@@ -1,6 +1,7 @@
 # grid_trading_app.py
+
 from version import VERSION, AUTHOR, DATE
-"""
+f"""
 Grid Trading Tool
 Version: {VERSION}
 Author: {AUTHOR}
@@ -32,10 +33,6 @@ logger = logging.getLogger(__name__)
 def main():
     try:
         logger.info("程序启动")
-
-        # 首次运行时转换 JSON 配置到 INI
-        # convert_json_to_ini()
-        # logger.info("配置转换完成")
 
         config = load_config()
         logger.info("配置加载完成")

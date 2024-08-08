@@ -1,3 +1,5 @@
+# .github/workflows/python-app.yml
+
 name: Release Grid Trading Plan Calculator
 
 on:
@@ -28,7 +30,7 @@ jobs:
       run: pytest
 
     - name: Build executable
-      run: pyinstaller --onefile grid_trading_app.py
+      run: python scripts/build_exe.py
 
     - name: Get system locale
       run: |
@@ -41,21 +43,21 @@ jobs:
         $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
         echo "VERSION=$VERSION" >> $env:GITHUB_ENV
       shell: pwsh
-  
+    
     - name: Compare versions
       id: compare_versions
       run: |
-          $latest_tag = (git describe --tags $(git rev-list --tags --max-count=1) 2>$null) -replace '^v', ''
-          if (-not $latest_tag) {
-            Write-Output "should_release=true" >> $env:GITHUB_ENV
-            exit 0
-          }
-          $current_version = $env:VERSION
-          if ([version]$current_version -gt [version]$latest_tag) {
-            Write-Output "should_release=true" >> $env:GITHUB_ENV
-          } else {
-            Write-Output "should_release=false" >> $env:GITHUB_ENV
-          }
+        $latest_tag = (git describe --tags $(git rev-list --tags --max-count=1) 2>$null) -replace '^v', ''
+        if (-not $latest_tag) {
+          Write-Output "should_release=true" >> $env:GITHUB_ENV
+          exit 0
+        }
+        $current_version = $env:VERSION
+        if ([version]$current_version -ne [version]$latest_tag) {
+          Write-Output "should_release=true" >> $env:GITHUB_ENV
+        } else {
+          Write-Output "should_release=false" >> $env:GITHUB_ENV
+        }
       shell: pwsh
   
     - name: Update README files
@@ -99,6 +101,7 @@ jobs:
           });
           
           return release.data.upload_url;
+
 
     - name: Upload Release Asset
       uses: actions/github-script@v6

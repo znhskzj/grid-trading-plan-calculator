@@ -1,17 +1,17 @@
+# src/config.py
+
 import os
 import json
 import configparser
 import logging
-from typing import Dict
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
 USER_CONFIG_FILE = 'user_config.json'
 
-
 def get_project_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 
 DEFAULT_CONFIG = {
     'General': {
@@ -37,7 +37,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-
 def load_config(config_file: str = 'config.ini') -> Dict[str, Dict[str, any]]:
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
@@ -46,11 +45,11 @@ def load_config(config_file: str = 'config.ini') -> Dict[str, Dict[str, any]]:
     if os.path.exists(config_path):
         try:
             config.read(config_path)
-            logger.info(f"配置已从 {config_path} 加载", extra={'config_module': 'config'})
+            logger.info(f"配置已从 {config_path} 加载")
         except configparser.Error as e:
-            logger.error(f"配置文件 {config_path} 读取错误: {str(e)}，使用默认配置", extra={'config_module': 'config'})
+            logger.error(f"配置文件 {config_path} 读取错误: {str(e)}，使用默认配置")
     else:
-        logger.warning(f"配置文件 {config_path} 不存在，使用默认配置", extra={'config_module': 'config'})
+        logger.warning(f"配置文件 {config_path} 不存在，使用默认配置")
         save_config(dict(config['General']), config_file)
 
     # 处理 AvailableAPIs
@@ -67,11 +66,9 @@ def save_config(config: Dict[str, str], config_file: str = 'config.ini'):
     config_path = os.path.join(get_project_root(), config_file)
     with open(config_path, 'w') as f:
         config_parser.write(f)
-    logger.info(f"配置已保存到 {config_path}", extra={'config_module': 'config'})
-
+    logger.info(f"配置已保存到 {config_path}")
 
 def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = 'config.ini'):
-    import json
     try:
         json_path = os.path.join(get_project_root(), json_file)
         ini_path = os.path.join(get_project_root(), ini_file)
@@ -81,9 +78,9 @@ def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = 'config.
 
         config = {'General': {k: str(v) for k, v in json_config.items()}}
         save_config(config['General'], ini_file)
-        logger.info(f"JSON 配置已转换并保存为 INI 格式: {ini_path}", extra={'config_module': 'config'})
+        logger.info(f"JSON 配置已转换并保存为 INI 格式: {ini_path}")
     except Exception as e:
-        logger.error(f"转换 JSON 到 INI 失败: {str(e)}", extra={'config_module': 'config'})
+        logger.error(f"转换 JSON 到 INI 失败: {str(e)}")
 
 def get_user_config_path():
     return os.path.join(get_project_root(), USER_CONFIG_FILE)
@@ -104,11 +101,23 @@ def load_user_config() -> Dict[str, any]:
         return user_config
     return {}
 
-def save_user_config(config):
-    config_path = get_user_config_path()
-    try:
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-        logger.info("用户配置已保存")
-    except Exception as e:
-        logger.error(f"保存用户配置时发生错误: {str(e)}")
+def save_user_config(config: Dict[str, any]):
+    config_parser = configparser.ConfigParser()
+    
+    # 保存 API 设置
+    config_parser['API'] = config.get('API', {})
+    
+    # 保存通用设置
+    config_parser['General'] = {
+        'allocation_method': config.get('allocation_method', '1')
+    }
+    
+    # 保存常用股票
+    config_parser['CommonStocks'] = {
+        f'stock{i+1}': stock for i, stock in enumerate(config.get('common_stocks', []))
+    }
+    
+    config_path = os.path.join(get_project_root(), 'config.ini')
+    with open(config_path, 'w') as f:
+        config_parser.write(f)
+    logger.info("用户配置已保存到 config.ini")

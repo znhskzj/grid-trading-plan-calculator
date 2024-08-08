@@ -1,8 +1,8 @@
 # 网格交易计划计算器
 
-版本：1.5.2
-作者：Rong Zhu
-日期：August 6, 2024
+版本：[VERSION]
+作者：[AUTHOR]
+日期：[DATE]
 
 ## 描述
 

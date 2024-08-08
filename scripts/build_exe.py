@@ -1,9 +1,13 @@
+# script/build_exe.py
+
 import os
 import subprocess
 import sys
 import tkinter as tk
 import shutil
 import logging
+
+from version import VERSION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -41,11 +45,12 @@ def clean_build():
 
 def build_exe():
     logging.info("Building executable...")
+    exe_name = f"Grid Trading Tool-{VERSION}"
     pyinstaller_command = [
         "pyinstaller",
         "--onefile",
         "--windowed",
-        "--name=Grid Trading Tool",
+        f"--name={exe_name}",
         "--add-data=assets/icons/app_icon.ico;assets/icons",
         "--icon=assets/icons/app_icon.ico",
         "--add-data=src;src",
@@ -57,14 +62,25 @@ def build_exe():
         logging.error(f"Error building executable: {e}")
         sys.exit(1)
 
+def update_readme():
+    subprocess.run([sys.executable, "scripts/update_readme.py"], check=True)
+
+def run_tests():
+    logging.info("Running tests...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pytest"])
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Tests failed: {e}")
+        sys.exit(1)
 
 def main():
     check_tkinter()
     install_dependencies()
+    run_tests()
+    update_readme()
     clean_build()
     build_exe()
     logging.info("Build complete. Executable can be found in the 'dist' folder.")
-
 
 if __name__ == "__main__":
     main()

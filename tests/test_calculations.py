@@ -1,9 +1,12 @@
+# test_calculations.py
+
 import pytest
 import sys
 import os
 from unittest.mock import Mock, patch, ANY
 import tkinter as tk
 from src.gui import App
+from src.calculations import parse_trading_instruction, calculate_grid_from_instruction
 from src.calculations import validate_inputs, calculate_weights, calculate_buy_plan
 import yfinance as yf
 from version import VERSION
@@ -267,8 +270,87 @@ def test_show_common_stocks(mock_app):
     # 检查是否尝试获取 CommonStocks 配置
     mock_app.config.get.assert_called_with('CommonStocks', {})
 
-# 添加更多测试...
+def test_parse_trading_instruction():
+    # 测试基本指令解析
+    instruction = "日内SOXL 现价到30之间分批入，压力31.5，止损29.5"
+    result = parse_trading_instruction(instruction)
+    assert result['symbol'] == 'SOXL'
+    assert result['current_price'] == 30.0
+    assert result['stop_loss'] == 29.5
+    assert result['resistance'] == 31.5
 
+    # 测试没有止损价的指令
+    instruction = "AAPL 现价150区间买入"
+    result = parse_trading_instruction(instruction)
+    assert result['symbol'] == 'AAPL'
+    assert result['current_price'] == 150.0
+    assert result['stop_loss'] is not None  # 应该自动设置一个止损价
+
+    # 测试价格区间指令
+    instruction = "TSLA 230-240之间建仓"
+    result = parse_trading_instruction(instruction)
+    assert result['symbol'] == 'TSLA'
+    assert result['price_range'] == (230.0, 240.0)
+
+    # 测试带有API价格的指令解析
+    instruction = "GOOGL 2800附近买入"
+    result = parse_trading_instruction(instruction, current_api_price=2850)
+    assert 'price_warning' in result
+
+def test_calculate_grid_from_instruction():
+    instruction = "日内SOXL 现价到30之间分批入，压力31.5，止损29.5"
+    parsed_instruction = parse_trading_instruction(instruction)
+    result = calculate_grid_from_instruction(parsed_instruction, 50000, 10, 1)
+    assert isinstance(result, str)
+    assert "SOXL" in result
+    assert "30.0" in result
+    assert "29.5" in result
+
+def test_validate_inputs_with_instruction():
+    instruction = "AAPL 现价150区间买入，止损145"
+    parsed_instruction = parse_trading_instruction(instruction)
+    with pytest.raises(ValueError, match="总资金必须大于初始价格"):
+        calculate_grid_from_instruction(parsed_instruction, 100, 10, 0)
+
+def test_calculate_weights_with_instruction():
+    instruction = "TSLA 230-240之间建仓，止损220"
+    parsed_instruction = parse_trading_instruction(instruction)
+    result = calculate_grid_from_instruction(parsed_instruction, 50000, 5, 2)
+    assert isinstance(result, str)
+    assert "线性加权分配" in result
+
+def test_edge_cases_with_instruction():
+    # 测试极小价格区间
+    instruction = "XYZ 100-100.1之间买入"
+    parsed_instruction = parse_trading_instruction(instruction)
+    result = calculate_grid_from_instruction(parsed_instruction, 10000, 5, 0)
+    assert isinstance(result, str)
+    assert "100.0" in result and "100.1" in result
+
+    # 测试大资金小价格
+    instruction = "PENNY 1-2元区间买入"
+    parsed_instruction = parse_trading_instruction(instruction)
+    result = calculate_grid_from_instruction(parsed_instruction, 1000000, 10, 1)
+    assert isinstance(result, str)
+    assert "大量股票" in result or "高数量" in result
+
+def test_invalid_instructions():
+    invalid_instructions = [
+        "买入 AAPL",  # 缺少价格信息
+        "XYZ 100到90之间买入",  # 起始价格大于结束价格
+        "ABC 现价到stop之间买入",  # 非数字价格
+    ]
+    for instruction in invalid_instructions:
+        with pytest.raises(ValueError):
+            parse_trading_instruction(instruction)
+
+def test_price_tolerance_warning():
+    instruction = "GOOG 2800附近买入"
+    result = parse_trading_instruction(instruction, current_api_price=3000)
+    assert 'price_warning' in result
+    assert '超过10%' in result['price_warning']
+
+# ... (保留原有的其他测试用例)
 
 if __name__ == "__main__":
     pytest.main()

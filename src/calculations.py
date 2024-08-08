@@ -1,7 +1,14 @@
+# src/calculations.py
+
 import logging
 import numpy as np
+import re
 from typing import Dict, List, Tuple
+import sys
+import os
 
+# 将项目根目录添加到 Python 路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils import exception_handler
 from src.status_manager import StatusManager
 
@@ -195,3 +202,104 @@ def format_results(
         StatusManager.update_status("计算完成")  # 添加此行
 
     return result
+
+
+def parse_trading_instruction(instruction: str, current_api_price: float = None) -> Dict[str, any]:
+    logger.info(f"开始解析交易指令: {instruction}")
+    instruction = instruction.upper()
+    
+    # 匹配股票代码，考虑可能的前缀如"日内"
+    symbol_match = re.search(r'(?:日内)?([A-Z]+)', instruction)
+    symbol = symbol_match.group(1) if symbol_match else None
+    logger.info(f"解析到的股票代码: {symbol}")
+    
+    # 匹配价格区间或单一价格
+    price_range = re.search(r'(?:区间|现价到?|)(\d+(\.\d+)?)(?:-|到|之间|附近)?\s*(?:(\d+(\.\d+)?))?', instruction)
+    if price_range:
+        lower_price = float(price_range.group(1))
+        higher_price = float(price_range.group(3)) if price_range.group(3) else lower_price
+        current_price = higher_price
+        logger.info(f"解析到的价格区间: {lower_price}-{higher_price}")
+    else:
+        current_price = None
+        lower_price = None
+        higher_price = None
+        logger.warning("未能解析到价格区间")
+    
+    # 查找止损价格
+    stop_loss_match = re.search(r'止损(\d+(\.\d+)?)', instruction)
+    if stop_loss_match:
+        stop_loss = float(stop_loss_match.group(1))
+        if stop_loss >= current_price:
+            stop_loss = current_price * 0.95  # 设置为当前价格的95%
+            logger.warning(f"止损价格高于或等于当前价格，已自动调整为 {stop_loss:.2f}")
+    else:
+        stop_loss = lower_price if lower_price else (current_price * 0.95 if current_price else None)
+    
+    logger.info(f"使用的止损价格: {stop_loss}")
+    
+    # 查找压力价格
+    resistance = re.search(r'压力(\d+(\.\d+)?)', instruction)
+    if resistance:
+        resistance = float(resistance.group(1))
+        logger.info(f"解析到的压力价格: {resistance}")
+    
+    result = {
+        "symbol": symbol,
+        "current_price": current_price,
+        "stop_loss": stop_loss,
+        "price_range": (lower_price, higher_price) if lower_price is not None else None,
+        "resistance": resistance if resistance else None
+    }
+    logger.info(f"解析结果: {result}")
+
+    price_tolerance = 0.1  # 10%的容忍度
+    if current_api_price and current_price:
+        if abs(current_api_price - current_price) / current_price > price_tolerance:
+            logger.warning(f"指令价格 {current_price} 与当前实际价格 {current_api_price} 相差过大")
+            result["price_warning"] = f"指令价格与当前实际价格相差超过{price_tolerance*100}%"
+    
+    return result
+
+def calculate_grid_from_instruction(parsed_instruction: Dict[str, any], total_funds: float, num_grids: int, allocation_method: int) -> str:
+    symbol = parsed_instruction["symbol"]
+    current_price = parsed_instruction["current_price"]
+    stop_loss = parsed_instruction["stop_loss"]
+    
+    if not current_price or not stop_loss:
+        raise ValueError("无法从指令中提取到足够的信息")
+    
+    buy_plan, warning_message = calculate_buy_plan(total_funds, current_price, stop_loss, num_grids, allocation_method)
+    
+    result = format_results({
+        'funds': total_funds,
+        'initial_price': current_price,
+        'stop_loss_price': stop_loss,
+        'num_grids': num_grids,
+        'allocation_method': allocation_method
+    }, buy_plan, warning_message)
+    
+    return result
+
+def test_parse_trading_instruction():
+    test_cases = [
+        "日内SOXL 现价到30之间分批入，压力31.5，止损29.5",
+        "AAPL 现价150区间买入，止损145",
+        "TSLA 230-240之间建仓，止损220",
+        "GOOGL 2800附近买入，压力2900",
+        "OXY 日内区间56.4-57，我待会通知大家如何做财报"
+    ]
+    
+    for instruction in test_cases:
+        print(f"\n测试指令: {instruction}")
+        result = parse_trading_instruction(instruction)
+        print(f"解析结果: {result}")
+        
+        if result['symbol'] and result['current_price'] and result['stop_loss']:
+            print("解析成功！")
+        else:
+            print("解析失败。缺少必要信息。")
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    test_parse_trading_instruction()
