@@ -1,10 +1,11 @@
-# .github/workflows/python-app.yml
-
 name: Release Grid Trading Plan Calculator
 
 on:
   push:
     branches: [ main ]
+
+env:
+  APP_NAME: "Grid Trading Tool"
 
 jobs:
   build:
@@ -29,20 +30,19 @@ jobs:
     - name: Run tests
       run: pytest
 
+    - name: Set VERSION env variable
+      run: echo "VERSION=$(python -c "from version import VERSION; print(VERSION)")" >> $env:GITHUB_ENV
+      shell: pwsh
+
     - name: Build executable
       run: python scripts/build_exe.py
+      env:
+        APP_NAME: ${{ env.APP_NAME }}
 
     - name: Get system locale
       run: |
         $locale = (Get-Culture).Name
         Write-Host "##locale=$locale"
-
-    - name: Get version
-      id: get_version
-      run: |
-        $VERSION = (Get-Content version.py | Select-String -Pattern "VERSION = ").ToString().Split('"')[1]
-        echo "VERSION=$VERSION" >> $env:GITHUB_ENV
-      shell: pwsh
     
     - name: Compare versions
       id: compare_versions
@@ -102,17 +102,18 @@ jobs:
           
           return release.data.upload_url;
 
-
     - name: Upload Release Asset
       uses: actions/github-script@v6
       env:
         VERSION: ${{ env.VERSION }}
+        APP_NAME: ${{ env.APP_NAME }}
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}
         script: |
           const fs = require('fs').promises;
           const { repo: { owner, repo }, sha } = context;
           const version = process.env.VERSION;
+          const appName = process.env.APP_NAME;
           
           const release = await github.rest.repos.getReleaseByTag({
             owner,
@@ -128,13 +129,26 @@ jobs:
 
           if (release) {
             console.log('Uploading release asset...');
-            const asset = await fs.readFile('./dist/grid_trading_app.exe');
+            const assetPath = `./dist/${appName}-${version}.exe`;
+            console.log(`Looking for asset at: ${assetPath}`);
             
-            await github.rest.repos.uploadReleaseAsset({
-              owner,
-              repo,
-              release_id: release.data.id,
-              name: 'grid_trading_app.exe',
-              data: asset
-            });
+            try {
+              const asset = await fs.readFile(assetPath);
+              
+              await github.rest.repos.uploadReleaseAsset({
+                owner,
+                repo,
+                release_id: release.data.id,
+                name: `${appName}-${version}.exe`,
+                data: asset
+              });
+              console.log('Asset uploaded successfully.');
+            } catch (error) {
+              console.error('Error reading or uploading asset:', error);
+              core.setFailed('Failed to upload release asset');
+            }
           }
+
+    - name: List dist directory
+      if: failure()
+      run: ls -R dist
