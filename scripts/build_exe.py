@@ -1,12 +1,13 @@
 # script/build_exe.py
 
+import sys
 import os
 import subprocess
-import sys
 import tkinter as tk
 import shutil
 import logging
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from version import VERSION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
