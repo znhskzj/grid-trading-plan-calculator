@@ -23,7 +23,8 @@ os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     filename=os.path.join(log_dir, 'grid_trading.log'),
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - [%(module)s] - %(message)s',
+    format='%(asctime)s - %(levelname)s - [%(name)s] - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
     encoding='utf-8'
 )
 

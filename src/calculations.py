@@ -201,6 +201,9 @@ def format_results(
     else:
         StatusManager.update_status("计算完成")  # 添加此行
 
+    if total_shares > 100000:  # 或者其他您认为合适的阈值
+        result += "\n注意：此计划包含大量股票。"
+
     return result
 
 
@@ -220,6 +223,8 @@ def parse_trading_instruction(instruction: str, current_api_price: float = None)
         higher_price = float(price_range.group(3)) if price_range.group(3) else lower_price
         current_price = higher_price
         logger.info(f"解析到的价格区间: {lower_price}-{higher_price}")
+        if lower_price > higher_price:
+            raise ValueError("价格区间无效：起始价格大于结束价格")
     else:
         current_price = None
         lower_price = None
@@ -244,6 +249,10 @@ def parse_trading_instruction(instruction: str, current_api_price: float = None)
         resistance = float(resistance.group(1))
         logger.info(f"解析到的压力价格: {resistance}")
     
+    # 验证必要信息是否存在
+    if not symbol or current_price is None:
+        raise ValueError("无效的指令格式：缺少股票代码或价格信息")
+    
     result = {
         "symbol": symbol,
         "current_price": current_price,
@@ -255,10 +264,9 @@ def parse_trading_instruction(instruction: str, current_api_price: float = None)
 
     price_tolerance = 0.1  # 10%的容忍度
     if current_api_price and current_price:
-        if abs(current_api_price - current_price) / current_price > price_tolerance:
-            logger.warning(f"指令价格 {current_price} 与当前实际价格 {current_api_price} 相差过大")
-            result["price_warning"] = f"指令价格与当前实际价格相差超过{price_tolerance*100}%"
-    
+        price_diff = abs(current_api_price - current_price) / current_price
+        if price_diff > price_tolerance:
+            result['price_warning'] = f"指令价格与当前实际价格相差超过{price_tolerance*100}%"
     return result
 
 def calculate_grid_from_instruction(parsed_instruction: Dict[str, any], total_funds: float, num_grids: int, allocation_method: int) -> str:
@@ -271,7 +279,7 @@ def calculate_grid_from_instruction(parsed_instruction: Dict[str, any], total_fu
     
     buy_plan, warning_message = calculate_buy_plan(total_funds, current_price, stop_loss, num_grids, allocation_method)
     
-    result = format_results({
+    result = f"标的: {symbol}\n" + format_results({
         'funds': total_funds,
         'initial_price': current_price,
         'stop_loss_price': stop_loss,

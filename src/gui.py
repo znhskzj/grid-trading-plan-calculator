@@ -17,7 +17,7 @@ from src.calculations import (
     calculate_with_reserve,
     parse_trading_instruction, 
     calculate_grid_from_instruction,
-    validate_inputs  # 添加这一行
+    validate_inputs 
 )
 from src.config import save_user_config, load_user_config
 from src.status_manager import StatusManager
@@ -49,10 +49,12 @@ class App:
         self.status_bar = None
         self.master.title(f"Grid Trading Tool v{self.version}")
 
+        self.is_closing = False  # 添加这一行
+
         self.user_config = load_user_config()
-        self.available_apis = config['AvailableAPIs']['apis']
-        self.api_choice = tk.StringVar(value=config['API']['choice'])
-        self.alpha_vantage_key = tk.StringVar(value=config['API']['alpha_vantage_key'])
+        self.available_apis = config.get('AvailableAPIs', {}).get('apis', ['yahoo', 'alpha_vantage'])
+        self.api_choice = tk.StringVar(value='yahoo')
+        self.alpha_vantage_key = tk.StringVar(value=config.get('API', {}).get('alpha_vantage_key', ''))
         self.setup_variables()
         self.instruction_var = tk.StringVar()
         self.create_widgets()
@@ -63,10 +65,12 @@ class App:
         
         App.instance = self
         StatusManager.set_instance(self)
-        self.is_closing = False
-    
-        # 设置主窗口的最小大小
-        self.master.minsize(600, 500)  # 根据需要调整这些值
+        
+        self.master.geometry("800x650")  # 设置固定窗口大小
+        self.master.minsize(800, 650)    # 设置最小大小
+        self.master.maxsize(800, 650)    # 设置最大大小
+        self.master.resizable(False, False)  # 禁止调整窗口大小
+        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def setup_variables(self) -> None:
         """设置GUI变量"""
@@ -98,7 +102,7 @@ class App:
     def create_status_bar(self) -> None:
         """创建状态栏"""
         self.status_bar = tk.Label(self.master, text="就绪", bd=1, relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))  # 添加一些上边距
 
     def create_left_frame(self) -> None:
         """创建左侧框架"""
@@ -116,10 +120,21 @@ class App:
 
     def create_result_frame(self) -> None:
         """创建结果显示区域"""
-        self.result_frame = tk.Frame(self.main_frame)
-        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
-        self.result_text = scrolledtext.ScrolledText(self.result_frame, height=15, width=50)
-        self.result_text.pack(fill=tk.BOTH, expand=True)
+        self.result_frame = tk.Frame(self.main_frame, bd=1, relief=tk.SUNKEN)  # 添加边框
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 10), padx=10)  # 增加边距
+        
+        # 创建一个带滚动条的文本区域
+        text_container = tk.Frame(self.result_frame)
+        text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)  # 添加内部边距
+        
+        self.result_text = tk.Text(text_container, height=10, wrap=tk.WORD)  # 减少高度
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        scrollbar = tk.Scrollbar(text_container)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.result_text.config(yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.result_text.yview)
 
     def create_left_widgets(self) -> None:
         """创建左侧组件"""
@@ -138,7 +153,7 @@ class App:
         
         # 创建一个框架来容纳分配方式和API选择
         option_frame = tk.Frame(self.right_frame)
-        option_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        option_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 10))  # 增加上下边距
         option_frame.grid_columnconfigure(0, weight=1)
         option_frame.grid_columnconfigure(1, weight=1)
         
@@ -247,6 +262,7 @@ class App:
         """显示计算结果"""
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, result)
+        self.result_text.see(tk.END)  # 滚动到最后
 
     def save_to_csv(self) -> None:
         """保存结果为CSV文件"""
@@ -304,9 +320,15 @@ class App:
         self.stop_loss_price_var.set(self.config['General']['stop_loss_price'])
         self.num_grids_var.set(self.config['General']['num_grids'])
         self.update_common_stocks(self.config.get('CommonStocks', {}).values())
-        self.user_config = {}
         self.current_symbol = None  # 重置当前选中的标的
         self.instruction_var.set("") # 清空交易指令输入框
+        
+        # 保留 Alpha Vantage API key
+        alpha_vantage_key = self.alpha_vantage_key.get()
+        self.user_config = {}
+        if alpha_vantage_key:
+            self.user_config['API'] = {'alpha_vantage_key': alpha_vantage_key}
+        
         self.save_user_settings()
         reset_message = "所有设置已重置为默认值"
         self.update_status(reset_message)
@@ -323,8 +345,12 @@ class App:
 
     def on_api_change(self) -> None:
         """API选择变更处理"""
-        if self.api_choice.get() == 'alpha_vantage' and not self.alpha_vantage_key.get():
-            self.prompt_for_alpha_vantage_key()
+        if self.api_choice.get() == 'alpha_vantage':
+            messagebox.showinfo("Alpha Vantage API 提示", 
+                                "请注意：Alpha Vantage 免费版 API 有每日请求次数限制。\n"
+                                "建议仅在必要时使用，以避免达到限制。")
+            if not self.alpha_vantage_key.get():
+                self.prompt_for_alpha_vantage_key()
         
         # 只有在 API 真正改变时才更新
         if self.api_manager.api_choice != self.api_choice.get() or \
@@ -336,28 +362,32 @@ class App:
 
     def prompt_for_alpha_vantage_key(self) -> None:
         """提示输入Alpha Vantage API密钥"""
-        new_key = simpledialog.askstring("Alpha Vantage API Key", 
-                                         "请输入您的 Alpha Vantage API Key:", 
-                                         initialvalue=self.alpha_vantage_key.get())
+        new_key = simpledialog.askstring("Alpha Vantage API Key",
+                                        "请输入您的 Alpha Vantage API Key:",
+                                        initialvalue=self.alpha_vantage_key.get())
         if new_key:
             self.alpha_vantage_key.set(new_key)
-            self.user_config.setdefault('API', {})['alpha_vantage_key'] = new_key
             self.save_user_settings()
         elif not self.alpha_vantage_key.get():
             # 如果用户取消输入且之前没有设置key，切换回Yahoo
             self.api_choice.set('yahoo')
             messagebox.showinfo("API 选择", "由于未提供 Alpha Vantage API Key，已切换回 Yahoo Finance API。")
-
+            self.save_user_settings()
 
     def save_user_settings(self) -> None:
         """保存用户设置"""
         if self.is_closing:
             return
+        
+        # 保存 API 选择
         self.user_config['API'] = {
             'choice': self.api_choice.get(),
         }
-        if self.api_choice.get() == 'alpha_vantage':
-            self.user_config['API']['alpha_vantage_key'] = self.user_config.get('API', {}).get('alpha_vantage_key', '')
+        
+        # 无论当前选择的是哪个 API，都保存 Alpha Vantage key（如果存在）
+        alpha_vantage_key = self.alpha_vantage_key.get()
+        if alpha_vantage_key:
+            self.user_config['API']['alpha_vantage_key'] = alpha_vantage_key
         
         self.user_config['allocation_method'] = self.allocation_method_var.get()
         self.user_config['common_stocks'] = [btn['text'] for btn in self.left_frame.winfo_children() if isinstance(btn, tk.Button) and btn != self.common_stocks_button]
@@ -369,9 +399,13 @@ class App:
         """加载用户设置"""
         if 'API' in self.user_config:
             self.api_choice.set(self.user_config['API'].get('choice', 'yahoo'))
-            self.alpha_vantage_key.set(self.user_config['API'].get('alpha_vantage_key', ''))
+            # 如果存在 Alpha Vantage key，总是加载它
+            if 'alpha_vantage_key' in self.user_config['API']:
+                self.alpha_vantage_key.set(self.user_config['API']['alpha_vantage_key'])
+        
         if 'allocation_method' in self.user_config:
             self.allocation_method_var.set(self.user_config['allocation_method'])
+        
         if 'common_stocks' in self.user_config:
             self.update_common_stocks(self.user_config['common_stocks'])
         
@@ -391,37 +425,41 @@ class App:
             btn.pack(pady=2)
 
     def set_stock_price(self, symbol: str) -> None:
-        for api in self.available_apis:
-            try:
-                self.api_choice.set(api)
-                self.api_manager = APIManager(api, self.alpha_vantage_key.get())
-                current_price, api_used = self.api_manager.get_stock_price(symbol)
-                if current_price:
-                    stop_loss_price = round(current_price * 0.9, 2)
-                    self.initial_price_var.set(str(current_price))
-                    self.stop_loss_price_var.set(str(stop_loss_price))
-                    self.current_symbol = symbol
-                    status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
-                    self.update_status(status_message)
-                    self.display_results(
-                        f"选中标的: {symbol}\n"
-                        f"当前价格: {current_price:.2f} 元 (来自 {api_used})\n"
-                        f"止损价格: {stop_loss_price:.2f} 元 (按90%当前价格计算)\n\n"
-                        f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
-                    )
-                    return
-            except Exception as e:
-                logger.error(f"使用 {api} 获取股票 {symbol} 的价格失败: {str(e)}")
+        api = self.api_choice.get()
+        try:
+            self.api_manager = APIManager(api, self.alpha_vantage_key.get())
+            current_price, api_used = self.api_manager.get_stock_price(symbol)
+            if current_price:
+                current_price = round(current_price, 2)  # 将价格四舍五入到两位小数
+                stop_loss_price = round(current_price * 0.9, 2)
+                self.initial_price_var.set(f"{current_price:.2f}")  # 使用字符串格式化确保显示两位小数
+                self.stop_loss_price_var.set(f"{stop_loss_price:.2f}")
+                self.current_symbol = symbol
+                status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
+                self.update_status(status_message)
+                self.display_results(
+                    f"选中标的: {symbol}\n"
+                    f"当前价格: {current_price:.2f} 元 (来自 {api_used})\n"
+                    f"止损价格: {stop_loss_price:.2f} 元 (按90%当前价格计算)\n\n"
+                    f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
+                )
+            else:
+                raise ValueError(f"无法从 {api_used} 获取有效的价格数据")
+        except Exception as e:
+            error_message = f"使用 {api} 获取股票 {symbol} 的价格失败: {str(e)}"
+            self.update_status(error_message)
+            self.display_results(f"无法获取标的 {symbol} 的价格\n\n错误信息: {error_message}\n\n请检查网络连接、API key 是否有效，或者股票代码是否正确。")
+            logger.error(error_message, exc_info=True)
         
-        error_message = f"无法获取股票 {symbol} 的价格"
-        self.update_status(error_message)
-        self.display_results(f"无法获取标的 {symbol} 的价格\n\n已尝试所有可用的API。请检查网络连接或标的代码是否正确。")
-        logger.error(error_message)
-        self.current_symbol = None
+        self.current_symbol = symbol  # 即使获取价格失败，也设置当前标的
         
     def update_status(self, message: str) -> None:
         """更新状态栏信息"""
         if self.status_bar:
+            # 截断长消息
+            max_length = 100  # 可以根据需要调整
+            if len(message) > max_length:
+                message = message[:max_length] + "..."
             self.status_bar.config(text=message)
         else:
             print(f"Status: {message}")  # 如果状态栏还未创建，则打印到控制台
@@ -518,11 +556,16 @@ class App:
 
     def setup_layout(self) -> None:
         """设置主窗口布局"""
-        self.master.grid_columnconfigure(1, weight=1)
+        self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_rowconfigure(0, weight=1)
+        
+        self.main_frame.grid_columnconfigure(1, weight=1)
+        self.main_frame.grid_rowconfigure(0, weight=3)  # 给上半部分更多空间
+        self.main_frame.grid_rowconfigure(1, weight=1)  # 给结果显示区域一些空间
+        
         self.right_frame.grid_columnconfigure(1, weight=1)
         for i in range(10):
-            self.right_frame.grid_rowconfigure(i, weight=1)
+            self.right_frame.grid_rowconfigure(i, weight=0)
 
     def process_instruction(self, instruction: str) -> None:
         try:
@@ -570,3 +613,8 @@ class App:
             self.display_results(result)
         
         self.update_status("计算完成")
+
+    def on_closing(self):
+        self.is_closing = True
+        self.save_user_settings()
+        self.master.destroy()
