@@ -27,6 +27,14 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
+    - name: Create mock userconfig.ini
+      run: |
+        echo "[MoomooAPI]" > userconfig.ini
+        echo "host = 127.0.0.1" >> userconfig.ini
+        echo "port = 11111" >> userconfig.ini
+        echo "trade_env = REAL" >> userconfig.ini
+        echo "security_firm = FUTUINC" >> userconfig.ini
+
     - name: Run tests
       run: pytest
 

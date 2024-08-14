@@ -11,8 +11,16 @@ pd.set_option('display.expand_frame_repr', False)
 def load_config():
     config = configparser.ConfigParser()
     config_path = os.path.join(os.path.dirname(__file__), '..', 'userconfig.ini')
+    if not os.path.exists(config_path):
+        print("Warning: userconfig.ini not found. Using default values.")
+        return {
+            'host': '127.0.0.1',
+            'port': '11111',
+            'trade_env': 'REAL',
+            'security_firm': 'FUTUINC'
+        }
     config.read(config_path)
-    return config['MoomooAPI']
+    return config['MoomooAPI'] if 'MoomooAPI' in config else {}
 
 # 加载配置
 moomoo_config = load_config()

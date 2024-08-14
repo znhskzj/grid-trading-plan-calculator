@@ -1,0 +1,5 @@
+[MoomooAPI]
+host = 127.0.0.1
+port = 11111
+trade_env = REAL
+security_firm = FUTUINC
