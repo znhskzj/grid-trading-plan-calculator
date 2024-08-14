@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import messagebox
 import logging
 from src.gui import App
-from src.config import load_config, convert_json_to_ini
+from src.config import load_system_config, convert_json_to_ini
 
 # 确保日志目录存在
 log_dir = 'logs'
@@ -35,7 +35,7 @@ def main():
     try:
         logger.info("程序启动")
 
-        config = load_config()
+        config = load_system_config()
         logger.info("配置加载完成")
 
         # 确保 'General' 键存在于配置中

@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.4] - 2024-08-14
+
+### Added
+- Integrated Moomoo API for real-time trading capabilities.
+- Added user-specific configuration file (userconfig.ini) for personalized settings.
+- Implemented automatic saving and loading of user preferences.
+- Added a new UserConfigWindow for easier configuration of API settings and allocation methods.
+
+### Changed
+- Refactored API management to support both Yahoo Finance and Alpha Vantage APIs.
+- Updated GUI to dynamically adjust based on user's screen resolution.
+- Modified common stocks display to use user-specific settings.
+- Improved error handling and user feedback for API-related operations.
+
+### Fixed
+- Resolved issues with API switching and key management.
+- Fixed a bug where the API choice was not properly updated after switching.
+- Corrected the display of multiple Alpha Vantage options in the API selection.
+
+### Improved
+- Enhanced the robustness of configuration loading and saving processes.
+- Optimized the layout of the main application window for better user experience.
+- Improved error logging and status updates for better troubleshooting.
+
+### Others
+- Updated documentation to reflect new features and changes.
+- Removed unused gen_md5.py script from the scripts directory.
+- Updated requirements.txt to include new dependencies for Moomoo API integration.
+
 ## [1.5.3] - 2024-08-07
 
 ### Added

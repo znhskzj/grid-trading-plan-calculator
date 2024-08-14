@@ -23,6 +23,8 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 - Trading instruction parsing for quick and flexible plan generation
 - Automatic adjustment of stop-loss prices to ensure they are below current prices
 - Price tolerance checking to warn users of significant price discrepancies
+- User-specific configuration file for personalized settings
+- Automatic saving and loading of user preferences
 
 ## Project Structure
 
@@ -156,6 +158,10 @@ python grid_trading_plan.py
 9. Automatic Updates:
    - The application will periodically check for updates.
    - If an update is available, you will be prompted to download and install it.
+
+10. Trading Instruction Parsing:
+   - Enter a trading instruction in the designated field to generate a plan based on the instruction.
+   - The application will parse the instruction and generate a plan accordingly.
 
 ### Example Usage
 

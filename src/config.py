@@ -4,71 +4,105 @@ import os
 import json
 import configparser
 import logging
-from typing import Dict, List
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-USER_CONFIG_FILE = 'user_config.json'
+USER_CONFIG_FILE = 'userconfig.ini'
+SYSTEM_CONFIG_FILE = 'config.ini'
 
 def get_project_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULT_CONFIG = {
     'General': {
-        'funds': '50000.0',
-        'initial_price': '50.0',
-        'stop_loss_price': '30.0',
-        'num_grids': '10',
-        'allocation_method': '1'
+        'default_funds': '50000.0',
+        'default_initial_price': '50.0',
+        'default_stop_loss_price': '30.0',
+        'default_num_grids': '10',
+        'default_allocation_method': '1'
     },
-    'CommonStocks': {
+    'GUI': {
+        'window_width': '750',
+        'window_height': '700'
+    },
+    'AvailableAPIs': {
+        'apis': 'yahoo,alpha_vantage'
+    },
+    'DefaultCommonStocks': {
         'stock1': 'AAPL',
         'stock2': 'GOOGL',
         'stock3': 'MSFT',
         'stock4': 'AMZN',
         'stock5': 'TSLA'
-    },
+    }
+}
+
+DEFAULT_USER_CONFIG = {
     'API': {
         'choice': 'yahoo',
         'alpha_vantage_key': ''
     },
-    'AvailableAPIs': {
-        'apis': 'yahoo,alpha_vantage'
+    'General': {
+        'allocation_method': '1'
+    },
+    'CommonStocks': {
+        'stock1': 'AAPL',
+        'stock2': 'GOOGL',
+        'stock3': 'UPST',
+        'stock4': 'TSLA',
+        'stock5': 'SOXL'
+    },
+    'RecentCalculations': {
+        'funds': '50000.0',
+        'initial_price': '50.0',
+        'stop_loss_price': '30.0',
+        'num_grids': '10'
     }
 }
 
-def load_config(config_file: str = 'config.ini') -> Dict[str, Dict[str, any]]:
+def load_system_config() -> Dict[str, Any]:
     config = configparser.ConfigParser()
     config.read_dict(DEFAULT_CONFIG)
     
-    config_path = os.path.join(get_project_root(), config_file)
+    config_path = os.path.join(get_project_root(), 'config.ini')
     if os.path.exists(config_path):
-        try:
-            config.read(config_path)
-            logger.info(f"配置已从 {config_path} 加载")
-        except configparser.Error as e:
-            logger.error(f"配置文件 {config_path} 读取错误: {str(e)}，使用默认配置")
-    else:
-        logger.warning(f"配置文件 {config_path} 不存在，使用默认配置")
-        save_config(dict(config['General']), config_file)
+        config.read(config_path)
+    
+    return {section: dict(config[section]) for section in config.sections()}
 
-    # 处理 AvailableAPIs
-    result = {section: dict(config[section]) for section in config.sections()}
-    if 'AvailableAPIs' in result:
-        result['AvailableAPIs']['apis'] = result['AvailableAPIs']['apis'].split(',')
-
-    return result
-
-def save_config(config: Dict[str, str], config_file: str = 'config.ini'):
+def save_system_config(config: Dict[str, Dict[str, str]], config_file: str = SYSTEM_CONFIG_FILE):
     config_parser = configparser.ConfigParser()
-    config_parser['General'] = config
+    for section, values in config.items():
+        config_parser[section] = values
 
     config_path = os.path.join(get_project_root(), config_file)
     with open(config_path, 'w') as f:
         config_parser.write(f)
-    logger.info(f"配置已保存到 {config_path}")
+    logger.info(f"系统配置已保存到 {config_path}")
 
-def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = 'config.ini'):
+def load_user_config() -> Dict[str, Any]:
+    config = configparser.ConfigParser()
+    config.read_dict(DEFAULT_USER_CONFIG)
+    
+    config_path = os.path.join(get_project_root(), 'user_config.ini')
+    if os.path.exists(config_path):
+        config.read(config_path)
+    else:
+        save_user_config(dict(config))
+    
+    return {section: dict(config[section]) for section in config.sections()}
+
+def save_user_config(config: Dict[str, Any]):
+    config_parser = configparser.ConfigParser()
+    for section, values in config.items():
+        config_parser[section] = {k: str(v) for k, v in values.items()}
+    
+    config_path = os.path.join(get_project_root(), 'user_config.ini')
+    with open(config_path, 'w') as f:
+        config_parser.write(f)
+
+def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = SYSTEM_CONFIG_FILE):
     try:
         json_path = os.path.join(get_project_root(), json_file)
         ini_path = os.path.join(get_project_root(), ini_file)
@@ -77,47 +111,7 @@ def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = 'config.
             json_config = json.load(f)
 
         config = {'General': {k: str(v) for k, v in json_config.items()}}
-        save_config(config['General'], ini_file)
+        save_system_config(config, ini_file)
         logger.info(f"JSON 配置已转换并保存为 INI 格式: {ini_path}")
     except Exception as e:
         logger.error(f"转换 JSON 到 INI 失败: {str(e)}")
-
-def get_user_config_path():
-    return os.path.join(get_project_root(), USER_CONFIG_FILE)
-
-def load_user_config() -> Dict[str, any]:
-    config = configparser.ConfigParser()
-    config_path = os.path.join(get_project_root(), 'config.ini')
-    if os.path.exists(config_path):
-        config.read(config_path)
-        user_config = {
-            'API': {
-                'choice': config.get('API', 'choice', fallback='yahoo'),
-                'alpha_vantage_key': config.get('API', 'alpha_vantage_key', fallback='')
-            },
-            'allocation_method': config.get('General', 'allocation_method', fallback='1'),
-            'common_stocks': [config.get('CommonStocks', f'stock{i}', fallback='') for i in range(1, 6) if config.get('CommonStocks', f'stock{i}', fallback='')]
-        }
-        return user_config
-    return {}
-
-def save_user_config(config: Dict[str, any]):
-    config_parser = configparser.ConfigParser()
-    
-    # 保存 API 设置
-    config_parser['API'] = config.get('API', {})
-    
-    # 保存通用设置
-    config_parser['General'] = {
-        'allocation_method': config.get('allocation_method', '1')
-    }
-    
-    # 保存常用股票
-    config_parser['CommonStocks'] = {
-        f'stock{i+1}': stock for i, stock in enumerate(config.get('common_stocks', []))
-    }
-    
-    config_path = os.path.join(get_project_root(), 'config.ini')
-    with open(config_path, 'w') as f:
-        config_parser.write(f)
-    logger.info("用户配置已保存到 config.ini")

@@ -6,9 +6,8 @@ __pycache__/
 *$py.class
 
 # Project specific
-config.json
 project_requirements.md
-config.ini
+userconfig.ini
 
 # C extensions
 *.so

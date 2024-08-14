@@ -10,3 +10,8 @@ configparser==7.0.0
 yfinance==0.2.41
 tqdm==4.66.5
 alpha_vantage==3.0.0
+moomoo-api==8.5.4508
+pandas==2.2.2
+protobuf==3.20.3
+pycryptodome==3.20.0
+simplejson==3.19.2

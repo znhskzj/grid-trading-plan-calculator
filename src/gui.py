@@ -3,19 +3,16 @@
 import csv
 import logging
 import os
-import re
+import tkinter as tk
+from tkinter import ttk
 from datetime import datetime
 from typing import Dict, Any
-
-import tkinter as tk
 from tkinter import messagebox, filedialog, scrolledtext, simpledialog
 from src.api_manager import AlphaVantageError, APIManager
 from src.calculations import (
-    calculate_buy_plan, 
     run_calculation, 
     calculate_with_reserve,
     parse_trading_instruction, 
-    calculate_grid_from_instruction,
     validate_inputs 
 )
 from src.config import save_user_config, load_user_config
@@ -48,10 +45,13 @@ class App:
         self.status_bar = None
         self.master.title(f"Grid Trading Tool v{self.version}")
 
-        self.is_closing = False  # 添加这一行
+        self.is_closing = False
 
         self.user_config = load_user_config()
-        self.available_apis = config.get('AvailableAPIs', {}).get('apis', ['yahoo', 'alpha_vantage'])
+        available_apis = config.get('AvailableAPIs', {}).get('apis', ['yahoo', 'alpha_vantage'])
+        if isinstance(available_apis, str):
+            available_apis = available_apis.split(',')
+        self.available_apis = list(dict.fromkeys(available_apis))  # 去重
         self.api_choice = tk.StringVar(value='yahoo')
         self.alpha_vantage_key = tk.StringVar(value=config.get('API', {}).get('alpha_vantage_key', ''))
         self.setup_variables()
@@ -59,26 +59,28 @@ class App:
         self.create_widgets()
         self.setup_layout()
         self.load_user_settings()
-
         self.api_manager = APIManager(self.api_choice.get(), self.alpha_vantage_key.get())
         
         App.instance = self
         StatusManager.set_instance(self)
         
-        self.master.geometry("800x650")  # 设置固定窗口大小
-        self.master.minsize(800, 650)    # 设置最小大小
-        self.master.maxsize(800, 650)    # 设置最大大小
+        self.master.geometry("750x700")  # 调整窗口大小
+        self.master.minsize(750, 700)    # 设置最小大小
+        self.master.maxsize(750, 700)    # 设置最大大小
         self.master.resizable(False, False)  # 禁止调整窗口大小
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def setup_variables(self) -> None:
         """设置GUI变量"""
-        general_config = self.config['General']
-        self.funds_var = tk.StringVar(value=general_config.get('funds', '0'))
-        self.initial_price_var = tk.StringVar(value=general_config['initial_price'])
-        self.stop_loss_price_var = tk.StringVar(value=general_config['stop_loss_price'])
-        self.num_grids_var = tk.StringVar(value=general_config['num_grids'])
-        self.allocation_method_var = tk.StringVar(value=general_config['allocation_method'])
+        recent_calc = self.user_config['RecentCalculations']
+        self.funds_var = tk.StringVar(value=recent_calc['funds'])
+        self.initial_price_var = tk.StringVar(value=recent_calc['initial_price'])
+        self.stop_loss_price_var = tk.StringVar(value=recent_calc['stop_loss_price'])
+        self.num_grids_var = tk.StringVar(value=recent_calc['num_grids'])
+        self.allocation_method_var = tk.StringVar(value=self.user_config['General']['allocation_method'])
+
+    def open_user_config(self):
+        UserConfigWindow(self.master, self.user_config)
 
     def create_widgets(self) -> None:
         """创建并布局所有GUI组件"""
@@ -119,14 +121,14 @@ class App:
 
     def create_result_frame(self) -> None:
         """创建结果显示区域"""
-        self.result_frame = tk.Frame(self.main_frame, bd=1, relief=tk.SUNKEN)  # 添加边框
-        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 10), padx=10)  # 增加边距
+        self.result_frame = tk.Frame(self.main_frame, bd=1, relief=tk.SUNKEN)
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 10), padx=10)
         
         # 创建一个带滚动条的文本区域
         text_container = tk.Frame(self.result_frame)
-        text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)  # 添加内部边距
+        text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.result_text = tk.Text(text_container, height=10, wrap=tk.WORD)  # 减少高度
+        self.result_text = tk.Text(text_container, height=15, wrap=tk.WORD)  # 增加高度
         self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         scrollbar = tk.Scrollbar(text_container)
@@ -257,11 +259,10 @@ class App:
             'allocation_method': int(self.allocation_method_var.get())
         }
 
-    def display_results(self, result: str) -> None:
-        """显示计算结果"""
+    def display_results(self, result):
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, result)
-        self.result_text.see(tk.END)  # 滚动到最后
+        self.result_text.see("1.0")  # 滚动到顶部
 
     def save_to_csv(self) -> None:
         """保存结果为CSV文件"""
@@ -318,7 +319,8 @@ class App:
         self.initial_price_var.set(self.config['General']['initial_price'])
         self.stop_loss_price_var.set(self.config['General']['stop_loss_price'])
         self.num_grids_var.set(self.config['General']['num_grids'])
-        self.update_common_stocks(self.config.get('CommonStocks', {}).values())
+        default_stocks = self.config.get('CommonStocks', {}).values()
+        self.update_common_stocks(default_stocks)
         self.current_symbol = None  # 重置当前选中的标的
         self.instruction_var.set("") # 清空交易指令输入框
         
@@ -332,32 +334,42 @@ class App:
         reset_message = "所有设置已重置为默认值"
         self.update_status(reset_message)
         self.display_results(reset_message)
+        self.api_manager = APIManager(self.api_choice.get(), self.alpha_vantage_key.get())
 
     def create_api_widgets(self, parent_frame) -> None:
         """创建API选择组件"""
         api_frame = tk.LabelFrame(parent_frame, text="API 选择")
         api_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
 
+        # 确保 available_apis 不为空
+        if not self.available_apis:
+            logger.error("没有可用的 API")
+            tk.Label(api_frame, text="无可用 API").grid(row=0, column=0, sticky="w")
+            return
+
         for i, api in enumerate(self.available_apis):
-            tk.Radiobutton(api_frame, text=api.capitalize(), variable=self.api_choice, 
+            display_name = "Yahoo" if api.lower() == "yahoo" else "Alpha Vantage"
+            tk.Radiobutton(api_frame, text=display_name, variable=self.api_choice, 
                         value=api, command=self.on_api_change).grid(row=i, column=0, sticky="w")
 
     def on_api_change(self) -> None:
         """API选择变更处理"""
-        if self.api_choice.get() == 'alpha_vantage':
-            messagebox.showinfo("Alpha Vantage API 提示", 
-                                "请注意：Alpha Vantage 免费版 API 有每日请求次数限制。\n"
-                                "建议仅在必要时使用，以避免达到限制。")
-            if not self.alpha_vantage_key.get():
+        new_api_choice = self.api_choice.get()
+        if new_api_choice == 'alpha_vantage':
+            existing_key = self.alpha_vantage_key.get()
+            if not existing_key:
+                messagebox.showinfo("Alpha Vantage API 提示", 
+                                    "请注意：Alpha Vantage 免费版 API 有每日请求次数限制。\n"
+                                    "建议仅在必要时使用，以避免达到限制。")
                 self.prompt_for_alpha_vantage_key()
+            else:
+                messagebox.showinfo("Alpha Vantage API", f"使用已保存的 API Key: {existing_key[:5]}...")
+                self.api_manager = APIManager('alpha_vantage', existing_key)
+        else:  # Yahoo API
+            self.api_manager = APIManager('yahoo', '')
         
-        # 只有在 API 真正改变时才更新
-        if self.api_manager.api_choice != self.api_choice.get() or \
-           (self.api_choice.get() == 'alpha_vantage' and 
-            self.api_manager.alpha_vantage_key != self.alpha_vantage_key.get()):
-            self.api_manager = APIManager(self.api_choice.get(), self.alpha_vantage_key.get())
-            self.save_user_settings()
-            self.update_status(f"已切换到 {self.api_choice.get()} API")
+        self.save_user_settings()
+        self.update_status(f"已切换到 {new_api_choice} API")
 
     def prompt_for_alpha_vantage_key(self) -> None:
         """提示输入Alpha Vantage API密钥"""
@@ -366,10 +378,12 @@ class App:
                                         initialvalue=self.alpha_vantage_key.get())
         if new_key:
             self.alpha_vantage_key.set(new_key)
+            self.api_manager = APIManager('alpha_vantage', new_key)
             self.save_user_settings()
-        elif not self.alpha_vantage_key.get():
+        else:
             # 如果用户取消输入且之前没有设置key，切换回Yahoo
             self.api_choice.set('yahoo')
+            self.api_manager = APIManager('yahoo', '')
             messagebox.showinfo("API 选择", "由于未提供 Alpha Vantage API Key，已切换回 Yahoo Finance API。")
             self.save_user_settings()
 
@@ -378,37 +392,39 @@ class App:
         if self.is_closing:
             return
         
-        # 保存 API 选择
-        self.user_config['API'] = {
-            'choice': self.api_choice.get(),
+        self.user_config['API']['choice'] = self.api_choice.get()
+        self.user_config['API']['alpha_vantage_key'] = self.alpha_vantage_key.get()
+        self.user_config['General']['allocation_method'] = self.allocation_method_var.get()
+        self.user_config['CommonStocks'] = {f'stock{i+1}': stock for i, stock in 
+                                            enumerate(btn['text'] for btn in self.left_frame.winfo_children() 
+                                                    if isinstance(btn, tk.Button) and btn != self.common_stocks_button)}
+        self.user_config['RecentCalculations'] = {
+            'funds': self.funds_var.get(),
+            'initial_price': self.initial_price_var.get(),
+            'stop_loss_price': self.stop_loss_price_var.get(),
+            'num_grids': self.num_grids_var.get()
         }
-        
-        # 无论当前选择的是哪个 API，都保存 Alpha Vantage key（如果存在）
-        alpha_vantage_key = self.alpha_vantage_key.get()
-        if alpha_vantage_key:
-            self.user_config['API']['alpha_vantage_key'] = alpha_vantage_key
-        
-        self.user_config['allocation_method'] = self.allocation_method_var.get()
-        self.user_config['common_stocks'] = [btn['text'] for btn in self.left_frame.winfo_children() if isinstance(btn, tk.Button) and btn != self.common_stocks_button]
         
         save_user_config(self.user_config)
         logger.info("用户设置已自动保存")
 
     def load_user_settings(self) -> None:
         """加载用户设置"""
-        if 'API' in self.user_config:
-            self.api_choice.set(self.user_config['API'].get('choice', 'yahoo'))
-            # 如果存在 Alpha Vantage key，总是加载它
-            if 'alpha_vantage_key' in self.user_config['API']:
-                self.alpha_vantage_key.set(self.user_config['API']['alpha_vantage_key'])
+        # 检查并设置 API 选择
+        user_api_choice = self.user_config['API']['choice']
+        if user_api_choice in self.available_apis:
+            self.api_choice.set(user_api_choice)
+        else:
+            # 如果用户配置中的 API 选择无效，则使用默认值（列表中的第一个）
+            self.api_choice.set(self.available_apis[0])
+            logger.warning(f"无效的 API 选择: {user_api_choice}，使用默认值: {self.available_apis[0]}")
+
+        self.alpha_vantage_key.set(self.user_config['API']['alpha_vantage_key'])
+        self.allocation_method_var.set(self.user_config['General']['allocation_method'])
         
-        if 'allocation_method' in self.user_config:
-            self.allocation_method_var.set(self.user_config['allocation_method'])
+        common_stocks = list(self.user_config['CommonStocks'].values())
+        self.update_common_stocks(common_stocks)
         
-        if 'common_stocks' in self.user_config:
-            self.update_common_stocks(self.user_config['common_stocks'])
-        
-        # 如果选择了 Alpha Vantage 但没有 API key，提示用户输入
         if self.api_choice.get() == 'alpha_vantage' and not self.alpha_vantage_key.get():
             self.prompt_for_alpha_vantage_key()
 
@@ -419,13 +435,18 @@ class App:
                 widget.destroy()
         
         for symbol in stocks:
-            btn = tk.Button(self.left_frame, text=symbol, width=10,
-                            command=lambda s=symbol: self.set_stock_price(s))
-            btn.pack(pady=2)
-
+            if symbol.strip():  # 确保股票代码不是空字符串
+                btn = tk.Button(self.left_frame, text=symbol, width=10,
+                                command=lambda s=symbol: self.set_stock_price(s))
+                btn.pack(pady=2)
 
     def set_stock_price(self, symbol: str) -> None:
         api = self.api_choice.get()
+        if api != self.api_manager.api_choice:
+            # 如果发现不一致，重新初始化 APIManager
+            self.api_manager = APIManager(api, self.alpha_vantage_key.get() if api == 'alpha_vantage' else '')
+            logger.warning(f"检测到 API 选择与 APIManager 不一致，已重新初始化为 {api}")
+
         error_message = None
         try:
             current_price, api_used = self.api_manager.get_stock_price(symbol)
@@ -513,11 +534,12 @@ class App:
                 if widget != self.common_stocks_button:
                     widget.destroy()
             
-            stocks = self.config.get('CommonStocks', {})
+            stocks = self.user_config.get('CommonStocks', {})
             for symbol in stocks.values():
-                btn = tk.Button(self.left_frame, text=symbol, width=10,
-                                command=lambda s=symbol: self.set_stock_price(s))
-                btn.pack(pady=2)
+                if symbol.strip():  # 确保股票代码不是空字符串
+                    btn = tk.Button(self.left_frame, text=symbol, width=10,
+                                    command=lambda s=symbol: self.set_stock_price(s))
+                    btn.pack(pady=2)
             self.common_stocks_button['text'] = "隐藏常用标的"
         
         self.left_frame.update()
@@ -624,3 +646,39 @@ class App:
         self.is_closing = True
         self.save_user_settings()
         self.master.destroy()
+
+class UserConfigWindow(tk.Toplevel):
+    def __init__(self, parent, user_config):
+        super().__init__(parent)
+        self.title("用户配置")
+        self.user_config = user_config
+        
+        self.api_var = tk.StringVar(value=user_config.get('API', {}).get('choice', 'yahoo'))
+        self.api_key_var = tk.StringVar(value=user_config.get('API', {}).get('alpha_vantage_key', ''))
+        self.allocation_var = tk.StringVar(value=user_config.get('allocation_method', '1'))
+        
+        self.create_widgets()
+
+    def create_widgets(self):
+        ttk.Label(self, text="API 选择:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        ttk.Radiobutton(self, text="Yahoo", variable=self.api_var, value="yahoo").grid(row=1, column=0, sticky="w", padx=20)
+        ttk.Radiobutton(self, text="Alpha Vantage", variable=self.api_var, value="alpha_vantage").grid(row=2, column=0, sticky="w", padx=20)
+
+        ttk.Label(self, text="API Key:").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+        ttk.Entry(self, textvariable=self.api_key_var).grid(row=4, column=0, padx=20, pady=5)
+
+        ttk.Label(self, text="分配方法:").grid(row=5, column=0, sticky="w", padx=5, pady=5)
+        ttk.Radiobutton(self, text="等金额", variable=self.allocation_var, value="0").grid(row=6, column=0, sticky="w", padx=20)
+        ttk.Radiobutton(self, text="等比例", variable=self.allocation_var, value="1").grid(row=7, column=0, sticky="w", padx=20)
+        ttk.Radiobutton(self, text="线性加权", variable=self.allocation_var, value="2").grid(row=8, column=0, sticky="w", padx=20)
+
+        ttk.Button(self, text="保存", command=self.save_config).grid(row=9, column=0, pady=10)
+
+    def save_config(self):
+        self.user_config['API'] = {
+            'choice': self.api_var.get(),
+            'alpha_vantage_key': self.api_key_var.get()
+        }
+        self.user_config['allocation_method'] = self.allocation_var.get()
+        save_user_config(self.user_config)
+        self.destroy()
