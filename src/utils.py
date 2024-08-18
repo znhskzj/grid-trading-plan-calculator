@@ -93,3 +93,6 @@ def check_for_updates():
     if latest_version and compare_versions(current_version, latest_version):
         return latest_version
     return None
+
+def get_project_root():
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -1,9 +1,5 @@
 # Grid Trading Plan Calculator
 
-Version: 1.5.3
-Author: Rong Zhu
-Date: August 7, 2024
-
 ## Description
 
 The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphical interface for creating, visualizing, and managing grid trading strategies. It enables users to input parameters such as total funds, initial price, stop-loss price, number of grids, and allocation method to generate a customized grid trading plan.
@@ -19,12 +15,20 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 - Comprehensive logging for debugging and auditing
 - User-friendly GUI with intuitive layout
 - Automatic update checking and installation
-- Users can now switch between Yahoo Finance and Alpha Vantage for stock data retrieval
+- Users can switch between Yahoo Finance and Alpha Vantage for stock data retrieval
 - Trading instruction parsing for quick and flexible plan generation
 - Automatic adjustment of stop-loss prices to ensure they are below current prices
 - Price tolerance checking to warn users of significant price discrepancies
 - User-specific configuration file for personalized settings
 - Automatic saving and loading of user preferences
+- Moomoo API integration for real-time trading capabilities
+- Support for both real and simulated trading environments
+- Market selection between US and HK stocks
+- Enhanced fund allocation display showing total, reserved, and available funds
+- Integration with Moomoo API for real-time account information and stock positions
+- Detailed display of stock portfolio, including quantity, market value, and profit/loss for each position
+- Support for both real and simulated trading environments in US and HK markets
+
 
 ## Project Structure
 
@@ -33,11 +37,13 @@ The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphic
 grid-trading-plan-calculator/
 ├── src/
 │   ├── __init__.py
+│   ├── api_interface.py
+│   ├── api_manager.py
 │   ├── calculations.py
 │   ├── config.py
 │   ├── gui.py
-│   ├── utils.py
-│   └── status_manager.py
+│   ├── status_manager.py
+│   └── utils.py
 ├── tests/
 │   ├── __pycache__/
 │   └── test_calculations.py
@@ -50,6 +56,7 @@ grid-trading-plan-calculator/
 ├── output/
 ├── scripts/
 │   ├── build_exe.py
+│   ├── test_moomoo_api.py
 │   └── update_readme.py
 ├── .github/
 │   └── workflows/
@@ -57,31 +64,47 @@ grid-trading-plan-calculator/
 ├── grid_trading_app.py
 ├── config.ini
 ├── CHANGELOG.md
-├── Grid Trading Plan Calculator.spec
-├── Grid Trading Tool.spec
 ├── LICENSE
-├── project_requirements.md
-├── pytest.ini
 ├── README.md
 ├── README-zh-CN.md
+├── userconfig.ini.template
 ├── requirements.txt
 └── version.py
 ```
 
 ### Main File Descriptions:
+
 - `grid_trading_app.py`: Main entry point of the application.
 - `src/`: Directory containing core application modules.
+  - `__init__.py`: Initializes the src package.
+  - `api_interface.py`: Defines interfaces for different APIs.
+  - `api_manager.py`: Manages API connections and requests.
+  - `calculations.py`: Contains core calculation logic for grid trading.
+  - `config.py`: Handles configuration loading and saving.
+  - `gui.py`: Implements the graphical user interface.
+  - `status_manager.py`: Manages application status updates.
+  - `utils.py`: Provides utility functions used across the application.
 - `tests/`: Directory containing unit tests.
-- `assets/`: Directory for static assets like icons.
+  - `test_calculations.py`: Unit tests for calculation functions.
+- `assets/`: Directory for static assets.
+  - `icons/`: Contains application icons.
+- `build/`: Directory for build outputs.
+- `dist/`: Directory for distribution files.
 - `logs/`: Directory for log files.
-- `scripts/`: Directory for utility scripts like the build script.
-- `config.ini`: Configuration file storing user's default settings.
+- `output/`: Directory for generated output files.
+- `scripts/`: Directory for utility scripts.
+  - `build_exe.py`: Script for building executable.
+  - `test_moomoo_api.py`: Script for testing Moomoo API integration.
+  - `update_readme.py`: Script for updating README files.
+- `.github/workflows/`: Contains GitHub Actions workflow configurations.
+- `config.ini`: Configuration file storing application settings.
 - `CHANGELOG.md`: Detailed version history and updates.
-- `version.py`: Central file for version management and update checking.
+- `LICENSE`: License file for the project.
+- `README.md`: Main project documentation in English.
+- `README-zh-CN.md`: Chinese version of the project documentation.
+- `userconfig.ini.template`: Template for user-specific configuration.
 - `requirements.txt`: List of Python package dependencies.
-- `LICENSE`: License file.
-- `README.md`: Main project documentation.
-- `README-zh-CN.md`: Chinese version of the documentation.
+- `version.py`: Central file for version management and update checking.
 
 ## Build Instructions
 
@@ -129,7 +152,7 @@ python grid_trading_plan.py
 
 2. In the main window:
    - The left panel displays common stock buttons.
-   - The right panel contains input fields and control buttons.
+   - The right panel contains input fields, control buttons, and settings.
 
 3. Click "Common Stocks" to view and select predefined stocks:
    - Clicking on a stock symbol (e.g., AAPL, GOOGL) will automatically fetch its current price.
@@ -145,23 +168,47 @@ python grid_trading_plan.py
    - Proportional: Allocates more funds to grids closer to the current price.
    - Linear Weighted: Gradually increases allocation as price moves away from the initial price.
 
-6. Click "Calculate Purchase Plan" to generate the grid trading plan.
+6. Select API source:
+   - Choose between Yahoo Finance and Alpha Vantage for stock data retrieval.
 
-7. View results in the text area below:
-   - The plan will show each grid's price level and the amount to invest at that level.
+7. Configure Moomoo settings:
+   - Select between real and simulated trading environments.
+   - Choose between US and HK stock markets.
+   - Click "Test Connection" to verify Moomoo API connectivity.
 
-8. Additional options:
-   - "Calculate with 10% Reserve" or "Calculate with 20% Reserve": Generates a plan while keeping a portion of funds in reserve.
-   - "Save as CSV": Exports the current plan to a CSV file for further analysis or record-keeping.
-   - "Reset to Default Values": Resets all input fields to their default values from the configuration.
+8. Click "Calculate Purchase Plan" to generate the grid trading plan.
 
-9. Automatic Updates:
-   - The application will periodically check for updates.
-   - If an update is available, you will be prompted to download and install it.
+9. View results in the text area below:
+   - The plan will show total funds, reserved funds (if any), available funds, and the allocation for each grid.
 
-10. Trading Instruction Parsing:
-   - Enter a trading instruction in the designated field to generate a plan based on the instruction.
-   - The application will parse the instruction and generate a plan accordingly.
+10. Additional options:
+    - "Calculate with 10% Reserve" or "Calculate with 20% Reserve": Generates a plan while keeping a portion of funds in reserve.
+    - "Save as CSV": Exports the current plan to a CSV file for further analysis or record-keeping.
+    - "Reset to Default Values": Resets input fields while preserving common stocks and Moomoo settings.
+
+11. Trading Instruction Parsing:
+    - Enter a trading instruction in the designated field to generate a plan based on the instruction.
+    - The application will parse the instruction and generate a plan accordingly.
+
+12. Automatic Updates:
+    - The application will periodically check for updates.
+    - If an update is available, you will be prompted to download and install it.
+
+13. Querying Account Information
+    - Ensure you have set up your Moomoo API connection in the settings.
+    - Click on the "Query Available Funds" button to view your current account balance and available funds.
+    - Use the "Query Stock Positions" button to see a detailed breakdown of your current stock holdings, including:
+      - Stock code
+      - Quantity
+      - Current market value
+      - Profit/Loss percentage
+
+### Moomoo API Integration
+
+- The tool now supports both real and simulated trading environments.
+- You can switch between US and HK markets in the Moomoo settings.
+- Always test your API connection before performing any operations.
+- Ensure your Moomoo account has the necessary permissions for the operations you wish to perform.
 
 ### Example Usage
 

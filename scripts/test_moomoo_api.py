@@ -1,9 +1,9 @@
 # test_moomoo_api.py
 
-from moomoo import *
-import pandas as pd
 import configparser
 import os
+from moomoo import *
+import pandas as pd
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.expand_frame_repr', False)
@@ -11,21 +11,30 @@ pd.set_option('display.expand_frame_repr', False)
 def load_config():
     config = configparser.ConfigParser()
     config_path = os.path.join(os.path.dirname(__file__), '..', 'userconfig.ini')
+    
+    # Default configuration
+    default_config = {
+        'host': '127.0.0.1',
+        'port': '11111',
+        'trade_env': 'REAL',
+        'security_firm': 'FUTUINC'
+    }
+    
     if not os.path.exists(config_path):
         print("Warning: userconfig.ini not found. Using default values.")
-        return {
-            'host': '127.0.0.1',
-            'port': '11111',
-            'trade_env': 'REAL',
-            'security_firm': 'FUTUINC'
-        }
-    config.read(config_path)
-    return config['MoomooAPI'] if 'MoomooAPI' in config else {}
+        config['MoomooAPI'] = default_config
+    else:
+        config.read(config_path)
+        if 'MoomooAPI' not in config:
+            print("Warning: MoomooAPI section not found in userconfig.ini. Using default values.")
+            config['MoomooAPI'] = default_config
+    
+    return config
 
-# 加载配置
-moomoo_config = load_config()
+# Load configuration
+moomoo_config = load_config()['MoomooAPI']
 HOST = moomoo_config.get('host', '127.0.0.1')
-PORT = moomoo_config.getint('port', 11111)
+PORT = int(moomoo_config.get('port', '11111'))
 TRADE_ENV = TrdEnv.REAL if moomoo_config.get('trade_env', 'REAL') == 'REAL' else TrdEnv.SIMULATE
 SECURITY_FIRM = getattr(SecurityFirm, moomoo_config.get('security_firm', 'FUTUINC'))
 

@@ -9,6 +9,7 @@ import yfinance as yf
 from src.gui import App
 from src.calculations import parse_trading_instruction, calculate_grid_from_instruction
 from src.calculations import validate_inputs, calculate_weights, calculate_buy_plan
+from src.calculations import run_calculation, calculate_with_reserve
 from version import VERSION
 
 # 模拟 tkinter
@@ -103,7 +104,7 @@ def test_calculate_weights():
     assert all(w > 0 for w in weights_linear)
     assert weights_linear[-1] > weights_linear[0]  # 最低价格应该有最高权重
 
-
+# 购买计划计算测试
 def test_calculate_buy_plan():
     funds = 50000
     initial_price = 100
@@ -118,7 +119,7 @@ def test_calculate_buy_plan():
     assert all(quantity > 0 for _, quantity in buy_plan)
     assert sum(price * quantity for price, quantity in buy_plan) <= funds
 
-
+# 测试计算结果的边界情况
 def test_validate_inputs_edge_cases():
     # 测试边界值
     validate_inputs(1, 1, 0.1, 2, 0)  # 最小可能的有效输入
@@ -204,6 +205,7 @@ def mock_app():
          patch('tkinter.Radiobutton', MagicMock):
         
         mock_config = {
+            'API': {'choice': 'yahoo', 'alpha_vantage_key': ''},
             'General': {
                 'funds': '50000.0',
                 'initial_price': '100.0',
@@ -213,7 +215,8 @@ def mock_app():
             },
             'CommonStocks': {'stock1': 'AAPL', 'stock2': 'GOOGL'},
             'AvailableAPIs': {'apis': ['yahoo', 'alpha_vantage']},
-            'API': {'choice': 'yahoo', 'alpha_vantage_key': ''}
+            'MoomooSettings': {'trade_mode': 'simulate', 'market': 'US'},
+            'RecentCalculations': []
         }
         
         # 创建一个模拟的 Frame 对象
@@ -237,7 +240,10 @@ def mock_app():
         app.stop_loss_price_var = MockStringVar(value='90.0')
         app.num_grids_var = MockStringVar(value='10')
         app.allocation_method_var = MockStringVar(value='1')
+        app.trade_mode_var = MockStringVar(value='simulate')
+        app.market_var = MockStringVar(value='US')
         app.user_config = {'common_stocks': []}
+        app.available_apis = ['yahoo', 'alpha_vantage']
         
         return app
 
@@ -264,8 +270,6 @@ def test_run_calculation(mock_app):
         mock_app.result_text.delete.assert_called()
         mock_app.result_text.insert.assert_called()
         assert any("计算完成" in str(call) for call in mock_app.status_bar.config.call_args_list)
-
-# in test_calculations.py
 
 def test_show_common_stocks(mock_app):
     mock_app.config = {'CommonStocks': {'stock1': 'AAPL', 'stock2': 'GOOGL'}}
@@ -377,6 +381,66 @@ def test_price_tolerance_warning():
     instruction = "GOOG 2800附近买入"
     result = parse_trading_instruction(instruction, current_api_price=3500)  # 增加价格差异
     assert 'price_warning' in result
+
+def test_moomoo_settings(mock_app):
+    assert mock_app.trade_mode_var.get() == 'simulate'
+    assert mock_app.market_var.get() == 'US'
+    
+    mock_app.trade_mode_var.set('real')
+    mock_app.market_var.set('HK')
+    
+    assert mock_app.trade_mode_var.get() == 'real'
+    assert mock_app.market_var.get() == 'HK'
+
+@patch('src.gui.App.test_moomoo_connection')
+def test_test_moomoo_connection(mock_test_connection, mock_app):
+    mock_test_connection.return_value = True
+    mock_app.display_results = Mock()
+    mock_app.test_moomoo_connection()
+    mock_app.display_results.assert_called_with("Moomoo API 连接成功！\n已连接到美股模拟账户。")
+    
+    mock_test_connection.return_value = False
+    mock_app.test_moomoo_connection()
+    mock_app.display_results.assert_called_with("Moomoo API 连接失败！\n无法连接到美股模拟账户，请检查设置。")
+
+def test_calculate_with_reserve(mock_app):
+    with patch('src.calculations.calculate_with_reserve', return_value="模拟保留资金计算结果"):
+        mock_app.display_results = Mock()
+        mock_app.calculate_with_reserve(10)
+        mock_app.status_bar.config.assert_called()
+        assert any("开始计算（保留10%资金）" in str(call) for call in mock_app.status_bar.config.call_args_list)
+        # 只检查 display_results 是否被调用
+        mock_app.display_results.assert_called()
+
+def test_reset_to_default(mock_app):
+    mock_app.reset_to_default()
+    assert mock_app.api_choice.get() == 'yahoo'
+    mock_app.funds_var.set.assert_called_with('10000')
+    assert mock_app.initial_price_var.get() == '100'
+    assert mock_app.stop_loss_price_var.get() == '90'
+    assert mock_app.num_grids_var.get() == '5'
+    assert mock_app.trade_mode_var.get() == '模拟'
+    assert mock_app.market_var.get() == '港股'
+
+def test_save_user_settings(mock_app):
+    with patch('src.config.save_user_config') as mock_save_config:
+        mock_app.save_user_settings()
+        mock_save_config.assert_called_once_with(mock_app.user_config)
+
+def test_load_user_settings(mock_app):
+    mock_config = {
+        'API': {'choice': 'alpha_vantage', 'alpha_vantage_key': 'test_key'},
+        'General': {'allocation_method': '2', 'funds': '100000'},
+        'MoomooSettings': {'trade_mode': 'real', 'market': 'HK'}
+    }
+    with patch('src.config.load_user_config', return_value=mock_config):
+        mock_app.load_user_settings()
+        assert mock_app.api_choice.get() == 'alpha_vantage'
+        assert mock_app.alpha_vantage_key.get() == 'test_key'
+        assert mock_app.allocation_method_var.get() == '2'
+        assert mock_app.funds_var.get() == '100000'
+        assert mock_app.trade_mode_var.get() == 'real'
+        assert mock_app.market_var.get() == 'HK'
 
 if __name__ == "__main__":
     pytest.main()
