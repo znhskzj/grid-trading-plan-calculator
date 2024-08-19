@@ -30,15 +30,9 @@ def load_moomoo_config():
 moomoo_config = load_moomoo_config()
 HOST = moomoo_config.get('host', '127.0.0.1')
 PORT = int(moomoo_config.get('port', '11111'))
-TRADE_ENV = TrdEnv.REAL if moomoo_config.get('trade_env', 'REAL') == 'REAL' else TrdEnv.SIMULATE
 SECURITY_FIRM = getattr(SecurityFirm, moomoo_config.get('security_firm', 'FUTUINC'))
 
 def test_moomoo_connection(trade_env: TrdEnv, market: TrdMarket) -> bool:
-    moomoo_config = load_moomoo_config()
-    HOST = moomoo_config.get('host', '127.0.0.1')
-    PORT = int(moomoo_config.get('port', '11111'))
-    SECURITY_FIRM = getattr(SecurityFirm, moomoo_config.get('security_firm', 'FUTUINC'))
-
     try:
         trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=market)
         ret, data = trd_ctx.get_acc_list()
@@ -52,13 +46,16 @@ def test_moomoo_connection(trade_env: TrdEnv, market: TrdMarket) -> bool:
     except Exception as e:
         logger.exception(f"Error testing Moomoo connection for {market} in {trade_env} mode: {str(e)}")
         return False
-
-def get_acc_list():
-    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=TrdMarket.US)
+    
+def get_acc_list(trade_env: TrdEnv, market: TrdMarket):
+    logger.info(f"Getting account list for trade_env: {trade_env}, market: {market}")
+    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=market)
     ret, data = trd_ctx.get_acc_list()
     trd_ctx.close()
     if ret == RET_OK:
-        return data
+        filtered_data = data[data['trd_env'] == trade_env]
+        logger.info(f"Filtered account list: {filtered_data.to_dict()}")
+        return filtered_data
     else:
         logger.error(f'获取账户列表失败：{data}')
         return None
@@ -77,36 +74,37 @@ def select_account(acc_list):
         except ValueError:
             print("请输入有效的数字。")
 
-def get_account_info(acc_id):
-    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=TrdMarket.US)
-    ret, data = trd_ctx.accinfo_query(trd_env=TRADE_ENV, acc_id=acc_id, currency=Currency.USD)
+def get_account_info(acc_id, trade_env: TrdEnv, market: TrdMarket):
+    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=market)
+    ret, data = trd_ctx.accinfo_query(acc_id=acc_id, trd_env=trade_env, currency=Currency.USD)
     trd_ctx.close()
     if ret == RET_OK:
         return data
     else:
-        print(f'获取账户 {acc_id} 信息失败：', data)
+        logger.error(f'获取账户 {acc_id} 信息失败：{data}')
         return None
 
-def get_history_orders(acc_id):
-    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=TrdMarket.US)
-    print(f"\n查询账户 {acc_id} 历史订单:")
-    ret, data = trd_ctx.history_order_list_query(trd_env=TRADE_ENV, acc_id=acc_id, start='2024-01-01', end='2024-08-13')
-    if ret == RET_OK:
-        print(f"总订单数: {len(data)}")
-        print("最近5笔订单:")
-        print(data.head())
-    else:
-        print('查询历史订单失败：', data)
-    trd_ctx.close()
-
-def get_positions(acc_id):
-    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=TrdMarket.US)
-    ret, data = trd_ctx.position_list_query(trd_env=TRADE_ENV, acc_id=acc_id)
+def get_history_orders(acc_id, trade_env: TrdEnv, market: TrdMarket):
+    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=market)
+    ret, data = trd_ctx.history_order_list_query(acc_id=acc_id, trd_env=trade_env)
     trd_ctx.close()
     if ret == RET_OK:
+        # 只记录订单数量，不记录具体订单信息
+        logger.info(f"Successfully retrieved {len(data)} history orders")
         return data
     else:
-        print(f'查询账户 {acc_id} 持仓失败：', data)
+        logger.error(f'查询账户 {acc_id} 历史订单失败：{data}')
+        return None
+
+def get_positions(acc_id, trade_env: TrdEnv, market: TrdMarket):
+    trd_ctx = OpenSecTradeContext(host=HOST, port=PORT, security_firm=SECURITY_FIRM, filter_trdmarket=market)
+    ret, data = trd_ctx.position_list_query(acc_id=acc_id, trd_env=trade_env)
+    trd_ctx.close()
+    if ret == RET_OK:
+        logger.info(f"Successfully retrieved {len(data)} positions")
+        return data
+    else:
+        logger.error(f'查询账户 {acc_id} 持仓失败：{data}')
         return None
     
 # 其他现有的API接口函数...

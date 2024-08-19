@@ -4,10 +4,11 @@ import csv
 import logging
 import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
 from datetime import datetime
 from typing import Dict, Any, Callable
-from tkinter import messagebox, filedialog, scrolledtext, simpledialog
+from moomoo import TrdEnv, TrdMarket
+
 from src.api_manager import AlphaVantageError, APIManager
 from src.calculations import (
     run_calculation, 
@@ -18,9 +19,14 @@ from src.calculations import (
 from src.config import save_user_config, load_user_config, load_system_config, DEFAULT_USER_CONFIG
 from src.status_manager import StatusManager
 from src.utils import exception_handler, compare_versions, get_latest_version
-from src.api_interface import test_moomoo_connection as api_test_moomoo_connection
-from src.api_interface import get_acc_list, select_account, get_account_info, get_positions
-from moomoo import TrdEnv, TrdMarket
+from src.api_interface import (
+    test_moomoo_connection,
+    get_history_orders,
+    get_acc_list,
+    select_account,
+    get_account_info,
+    get_positions
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +69,13 @@ class App:
         self.setup_window_properties()
         self.load_user_settings()
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.trade_env = None
+        self.market = None
+        self.current_symbol = None
+        self.moomoo_connected = False
+        self.last_connected_env = None
+        self.last_connected_market = None
 
-    
     def load_configurations(self):
             """加载用户配置和系统配置"""
             self.system_config = load_system_config()
@@ -266,7 +277,7 @@ class App:
             ("查询可用资金", self.query_available_funds),
             ("查询持仓股票", self.query_positions),
             ("按标的计划下单", self.place_order_by_plan),
-            ("计算总体利润", self.calculate_total_profit),
+            ("查询历史订单", self.query_history_orders),
             ("开启实时通知", self.enable_real_time_notifications)
         ]
 
@@ -303,25 +314,31 @@ class App:
         ttk.Button(moomoo_frame, text="测试连接", command=self.test_moomoo_connection).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
 
     def test_moomoo_connection(self):
-        trade_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
-        market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
+        self.trade_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
+        self.market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
         
-        env_str = "真实" if trade_env == TrdEnv.REAL else "模拟"
-        market_str = "美股" if market == TrdMarket.US else "港股"
+        env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+        market_str = "美股" if self.market == TrdMarket.US else "港股"
         
-        result = api_test_moomoo_connection(trade_env, market)
+        result = test_moomoo_connection(self.trade_env, self.market)
         if result:
             success_message = f"Moomoo API 连接成功！\n已连接到{market_str}{env_str}账户。"
             self.display_results(success_message)
-            self.update_status("Moomoo API 连接成功")
-            self.moomoo_connected = True  # 添加此行
+            self.update_status(f"Moomoo API 已连接 - {market_str}{env_str}账户")
+            self.moomoo_connected = True
+            self.last_connected_env = self.trade_env
+            self.last_connected_market = self.market
+            self.get_current_account()
         else:
             error_message = f"Moomoo API 连接失败！\n无法连接到{market_str}{env_str}账户，请检查设置。"
             self.display_results(error_message)
             self.update_status("Moomoo API 连接失败")
-            self.moomoo_connected = False  # 添加此行
-        return result  # 修改：返回连接结果
-
+            self.moomoo_connected = False
+            self.last_connected_env = None
+            self.last_connected_market = None
+            self.current_acc_id = None
+        return result
+    
     def run_calculation(self) -> None:
         self.update_status("开始计算购买计划...")
         try:
@@ -330,6 +347,7 @@ class App:
                 self.process_instruction(instruction)
             else:
                 self._run_normal_calculation()
+            self.current_symbol = self.symbol_var.get() if hasattr(self, 'symbol_var') else None
         except ValueError as ve:
             error_message = f"输入错误: {str(ve)}"
             self.update_status(error_message)
@@ -371,6 +389,8 @@ class App:
                 self.display_results(result)
             
             self.update_status("计算完成")
+            self.current_symbol = self.symbol_var.get() if hasattr(self, 'symbol_var') else None
+
         except Exception as e:
             error_message = f"计算过程中发生错误: {str(e)}"
             self.update_status(error_message)
@@ -413,6 +433,7 @@ class App:
                 self.display_results(result)
             
             self.update_status(f"计算完成（保留{reserve_percentage}%资金）")
+            self.current_symbol = self.symbol_var.get() if hasattr(self, 'symbol_var') else None
         except ValueError as ve:
             error_message = f"输入错误: {str(ve)}"
             self.update_status(error_message)
@@ -439,12 +460,13 @@ class App:
         formatted_lines = []
         
         # 处理标的信息（如果有）
-        if lines[0].startswith("标的:"):
+        if lines and lines[0].startswith("标的:"):
             formatted_lines.append(lines.pop(0))
         
-        # 处理查询账户持仓信息
-        if lines[0].startswith("查询账户") and "持仓:" in lines[0]:
-            formatted_lines.extend(lines)  # 对于持仓信息，保持原格式
+        # 检查是否为持仓信息
+        if lines and lines[0].startswith("当前连接:"):
+            # 对于持仓信息，保持原格式
+            formatted_lines.extend(lines)
         else:
             # 格式化资金信息
             funds_info = ' | '.join(line.strip() for line in lines[:3] if line.strip())
@@ -476,7 +498,7 @@ class App:
                 formatted_lines.append(" | ".join(summary_lines[3:5]))
         
         formatted_result = '\n'.join(formatted_lines)
-        
+    
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, formatted_result)
         self.result_text.see("1.0")  # 滚动到顶部
@@ -759,78 +781,210 @@ class App:
                 return False
         return True
 
+    def get_current_account(self):
+        self.trade_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
+        self.market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
+        logger.info(f"Current settings: trade_env={self.trade_env}, market={self.market}")
+        acc_list = get_acc_list(self.trade_env, self.market)
+        if acc_list is not None and not acc_list.empty:
+            self.current_acc_id = acc_list.iloc[0]['acc_id']
+            logger.info(f"Selected account: {self.current_acc_id}")
+        else:
+            self.current_acc_id = None
+            logger.warning("No accounts found")
+
     def query_available_funds(self):
         if not self.check_moomoo_connection():
             return
-        acc_list = get_acc_list()
-        if acc_list is not None and not acc_list.empty:
-            acc_id = acc_list.iloc[0]['acc_id']  # 使用第一个账户
-            info = get_account_info(acc_id)
-            if info is not None and not info.empty:
-                result = f"账户 {acc_id} 资金情况:\n"
-                result += f"总资产: ${info['total_assets'].values[0]:.2f}\n"
-                result += f"现金: ${info['cash'].values[0]:.2f}\n"
-                result += f"市值: ${info['market_val'].values[0]:.2f}\n"
-                result += f"购买力: ${info['power'].values[0]:.2f}\n"
-                self.display_results(result)
-            else:
-                self.display_results("无法获取账户信息")
+        if self.current_acc_id is None:
+            self.display_results("无法获取账户信息")
+            return
+        
+        logger.info(f"Querying funds for account: {self.current_acc_id}, env: {self.trade_env}, market: {self.market}")
+        info = get_account_info(self.current_acc_id, self.trade_env, self.market)
+        logger.info(f"Account info received: {info}")
+        
+        info = get_account_info(self.current_acc_id, self.trade_env, self.market)
+        if info is not None and not info.empty:
+            env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+            market_str = "美股" if self.market == TrdMarket.US else "港股"
+            result = f"当前连接: {market_str}{env_str}账户\n"
+            result += f"账户 {self.current_acc_id} 资金情况:\n"
+            
+            # 使用安全的格式化方法
+            def safe_format(value):
+                try:
+                    return f"{float(value):.2f}" if value != 'N/A' else 'N/A'
+                except ValueError:
+                    return str(value)
+            
+            result += f"总资产: ${safe_format(info['total_assets'].values[0])}\n"
+            result += f"现金: ${safe_format(info['cash'].values[0])}\n"
+            result += f"证券市值: ${safe_format(info['securities_assets'].values[0])}\n"
+            result += f"购买力: ${safe_format(info['power'].values[0])}\n"
+            result += f"最大购买力: ${safe_format(info['max_power_short'].values[0])}\n"
+            result += f"币种: {info['currency'].values[0]}\n"
+            
+            self.display_results(result)
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 资金查询完成")
         else:
-            self.display_results("无法获取账户列表")
+            self.display_results("无法获取账户信息")
 
     def enable_real_time_notifications(self):
         if not self.check_moomoo_connection():
             return
-        self.display_results("开启实时通知功能尚未实现")
+        message = "实时通知功能需要注册用户并付费开通。\n根据discord群的喊单记录直接调用解析指令并生成购买计划\n请联系作者了解更多信息。"
+        self.display_results(message)
+        messagebox.showinfo("实时通知", message)
 
     def place_order_by_plan(self):
         if not self.check_moomoo_connection():
             return
-        self.display_results("按标的计划下单功能尚未实现")
+        
+        current_result = self.result_text.get("1.0", tk.END).strip()
+        
+        if not current_result or "错误" in current_result:
+            message = "当前没有有效的购买计划。请先运行计算。"
+            self.display_results(message)
+            return
+        
+        # 从计算结果中提取标的
+        lines = current_result.split('\n')
+        symbol_line = next((line for line in lines if line.startswith("标的:")), None)
+        if symbol_line:
+            self.current_symbol = symbol_line.split(":")[1].strip()
+        
+        if not self.current_symbol:
+            message = "无法识别当前标的。请确保已正确计算并显示计划。"
+            self.display_results(message)
+            return
+        
+        # 解析计算结果以获取计划细节
+        plan = []
+        for line in lines:
+            if "价格:" in line and "购买股数:" in line:
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    price = float(parts[0].split(":")[1].strip())
+                    quantity = int(parts[1].split(":")[1].strip())
+                    plan.append({"price": price, "quantity": quantity})
+        
+        if not plan:
+            message = "无法解析购买计划。请确保已正确计算并显示计划。"
+            self.display_results(message)
+            return
+        
+        env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+        market_str = "美股" if self.market == TrdMarket.US else "港股"
+        message = f"当前连接: {market_str}{env_str}账户\n"
+        message += f"准备按计划为标的 {self.current_symbol} 下单。\n"
+        message += "注意：这是在模拟系统中进行的测试，实际下单风险自负。\n\n"
+        message += "当前计划：\n"
+        message += f"标的：{self.current_symbol}\n"
+        message += "购买计划：\n"
+        for item in plan:
+            message += f"  价格: {item['price']:.2f}, 数量: {item['quantity']}\n"
+        
+        message += "\n是否确认按此计划下单？"
+        
+        if messagebox.askyesno("确认下单", message):
+            # 这里应该是实际下单的逻辑，目前我们只是显示一个确认消息
+            self.display_results(f"模拟下单成功！实际环境中，订单将按计划执行。\n当前连接: {market_str}{env_str}账户")
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 模拟下单完成")
+        else:
+            self.display_results(f"已取消下单。\n当前连接: {market_str}{env_str}账户")
 
     def query_positions(self):
         if not self.check_moomoo_connection():
             return
-        acc_list = get_acc_list()
-        if acc_list is not None and not acc_list.empty:
-            acc_id = acc_list.iloc[0]['acc_id']  # 使用第一个账户
-            positions = get_positions(acc_id)
-            if positions is not None:
-                if not positions.empty:
-                    result = f"查询账户 {acc_id} 持仓:\n"
-                    result += f"持仓股票数: {len(positions)}\n"
-                    result += "持仓摘要:\n"
-                    result += "{:<5}{:<10}{:>10}{:>15}{:>15}\n".format("序号", "代码", "数量", "市值($)", "盈亏比例(%)")
-                    result += "-" * 60 + "\n"
-                    
-                    total_market_value = 0
-                    total_profit_loss = 0
-                    
-                    for index, row in positions.iterrows():
-                        result += "{:<5}{:<10}{:>10d}{:>15,.2f}{:>15.2f}\n".format(
-                            index+1, 
-                            row['code'], 
-                            int(row['qty']),  # 将数量转换为整数
-                            row['market_val'], 
-                            row['pl_ratio']
-                        )
-                        total_market_value += row['market_val']
-                        total_profit_loss += row['market_val'] * row['pl_ratio'] / 100
-                    
-                    result += "-" * 60 + "\n"
-                    result += f"总市值: ${total_market_value:,.2f}\n"
-                    result += f"总盈亏: ${total_profit_loss:,.2f} ({total_profit_loss/total_market_value*100:.2f}%)\n"
-                    
-                    self.display_results(result)
-                else:
-                    self.display_results("当前没有持仓")
-            else:
-                self.display_results("无法获取持仓信息")
+        if self.current_acc_id is None:
+            self.display_results("无法获取账户信息")
+            return
+        
+        positions = get_positions(self.current_acc_id, self.trade_env, self.market)
+        if positions is not None and not positions.empty:
+            logger.info(f"User queried positions for account {self.current_acc_id}")
+            
+            env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+            market_str = "美股" if self.market == TrdMarket.US else "港股"
+            result = f"当前连接: {market_str}{env_str}账户\n"
+            result += f"查询账户 {self.current_acc_id} 持仓:\n"
+            result += f"持仓股票数: {len(positions)}\n"
+            result += "{:<5}{:<10}{:<12}{:<15}{:<15}{:<15}\n".format(
+                "序号", "代码", "数量", "市值($)", "成本价", "盈亏比例(%)"
+            )
+            result += "-" * 80 + "\n"
+            
+            # 按市值降序排序
+            positions_sorted = positions.sort_values(by='market_val', ascending=False)
+            
+            for index, row in positions_sorted.iterrows():
+                result += "{:<5}{:<10}{:<12,.2f}{:<15,.2f}{:<15,.2f}{:<15,.2f}\n".format(
+                    index+1,
+                    row['code'],
+                    row['qty'],
+                    row['market_val'],
+                    row['cost_price'],
+                    row['pl_ratio']
+                )
+            self.display_results(result)
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 持仓查询完成")
         else:
-            self.display_results("无法获取账户列表")
+            self.display_results("无法获取持仓信息或没有持仓")
+
+    def query_history_orders(self):
+        if not self.check_moomoo_connection():
+            return
+        if self.current_acc_id is None:
+            self.display_results("无法获取账户信息")
+            return
+        
+        orders = get_history_orders(self.current_acc_id, self.trade_env, self.market)
+        if orders is not None and not orders.empty:
+            logger.info(f"User queried history orders for account {self.current_acc_id}")
+            
+            env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+            market_str = "美股" if self.market == TrdMarket.US else "港股"
+            result = f"当前连接: {market_str}{env_str}账户\n"
+            result += f"查询账户 {self.current_acc_id} 历史订单:\n"
+            result += f"总订单数: {len(orders)}\n"
+            result += "最近10笔订单:\n"
+            result += "{:<5}{:<10}{:<8}{:<12}{:<15}{:<15}\n".format(
+                "序号", "代码", "方向", "数量", "价格", "创建日期"
+            )
+            result += "-" * 80 + "\n"
+            
+            for index, row in orders.head(10).iterrows():
+                create_time = row['create_time']
+                if isinstance(create_time, str):
+                    try:
+                        create_time = datetime.strptime(create_time, '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        try:
+                            create_time = datetime.strptime(create_time, '%Y-%m-%d %H:%M:%S')
+                        except ValueError:
+                            pass
+                
+                formatted_date = create_time.strftime('%Y-%m-%d') if isinstance(create_time, datetime) else str(create_time)
+                
+                result += "{:<5}{:<10}{:<8}{:<12,.2f}{:<15,.2f}{:<15}\n".format(
+                    index+1,
+                    row['code'],
+                    row['trd_side'],
+                    row['qty'],
+                    row['price'],
+                    formatted_date
+                )
+            self.display_results(result)
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 历史订单查询完成")
+        else:
+            self.display_results("无法获取历史订单信息或没有历史订单")
 
     def check_moomoo_connection(self):
-        if not hasattr(self, 'moomoo_connected') or not self.moomoo_connected:
+        current_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
+        current_market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
+
+        if not self.moomoo_connected or self.last_connected_env != current_env or self.last_connected_market != current_market:
             messagebox.showwarning("未连接", "请先在Moomoo设置中完成测试连接")
             return False
         return True
@@ -888,6 +1042,7 @@ class App:
                 
                 current_result = self.result_text.get("1.0", tk.END)
                 self.display_results(instruction_info + current_result)
+                self.current_symbol = self.symbol_var.get() if hasattr(self, 'symbol_var') else None
             else:
                 raise ValueError("指令中缺少必要的信息")
         except Exception as e:
