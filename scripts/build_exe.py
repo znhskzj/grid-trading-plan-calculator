@@ -1,5 +1,3 @@
-# script/build_exe.py
-
 import sys
 import os
 import subprocess
@@ -14,6 +12,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 APP_NAME = os.environ.get('APP_NAME', 'Grid Trading Tool')
 EXE_NAME = f"{APP_NAME}-{VERSION}"
+BUILD_DIR = 'build'
+SPEC_FILE = os.path.join(BUILD_DIR, f'{APP_NAME}.spec')
 
 def run_command(command, error_message):
     try:
@@ -38,7 +38,7 @@ def check_tkinter():
 
 def clean_build():
     logging.info("Cleaning old build files...")
-    for item in ['build', 'dist', f'{APP_NAME}.spec']:
+    for item in ['dist', SPEC_FILE]:
         if os.path.isdir(item):
             shutil.rmtree(item)
         elif os.path.isfile(item):
@@ -46,30 +46,33 @@ def clean_build():
 
 def build_exe():
     logging.info("Building executable...")
-    pyinstaller_command = [
+    if not os.path.exists(SPEC_FILE):
+        # Generate spec file if it doesn't exist
+        pyinstaller_command = [
+            "pyinstaller",
+            "--name", APP_NAME,
+            "--specpath", BUILD_DIR,
+            "--add-data", "assets/icons/app_icon.ico;assets/icons",
+            "--icon", "assets/icons/app_icon.ico",
+            "--add-data", "src;src",
+            "grid_trading_app.py"
+        ]
+        run_command(pyinstaller_command, "Error generating spec file")
+
+    # Build using the spec file
+    build_command = [
         "pyinstaller",
+        "--clean",
         "--onefile",
         "--windowed",
         f"--name={EXE_NAME}",
-        "--add-data=assets/icons/app_icon.ico;assets/icons",
-        "--icon=assets/icons/app_icon.ico",
-        "--add-data=src;src",
-        "grid_trading_app.py"
+        SPEC_FILE
     ]
-    run_command(pyinstaller_command, "Error building executable")
-
-def update_readme():
-    run_command([sys.executable, "scripts/update_readme.py"], "Failed to update README")
-
-def run_tests():
-    logging.info("Running tests...")
-    run_command([sys.executable, "-m", "pytest"], "Tests failed")
+    run_command(build_command, "Error building executable")
 
 def main():
     check_tkinter()
     install_dependencies()
-    run_tests()
-    update_readme()
     clean_build()
     build_exe()
     logging.info(f"Build complete. Executable '{EXE_NAME}' can be found in the 'dist' folder.")

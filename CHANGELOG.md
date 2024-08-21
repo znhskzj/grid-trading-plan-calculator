@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.7] - 2024-08-19
+
+### Added
+- Implemented trading instruction parsing for quick and flexible plan generation.
+- Added support for processing trading instructions in all calculation methods (normal, 10% reserve, and 20% reserve).
+- Enhanced the display of calculation results to include parsed trading instruction information.
+
+### Changed
+- Modified the `set_stock_price` method to update the current symbol when selecting a stock.
+- Updated the `run_calculation`, `_run_normal_calculation`, and `calculate_with_reserve` methods to handle trading instructions.
+
+### Improved
+- Optimized the display format of calculation results for consistency across all calculation methods.
+- Enhanced the handling of default trading instruction text to prevent unintended processing.
+
+### Fixed
+- Resolved issues with losing selected stock information when switching between calculation methods.
+- Fixed a syntax error related to f-string expressions containing backslashes.
+
+### Others
+- Refined error handling and logging for trading instruction parsing and processing.
+- Updated the GUI to provide clearer feedback on trading instruction processing.
+
 ## [1.5.6] - 2024-08-18
 
 ### Added

@@ -3,32 +3,16 @@
 """
 This module handles configuration management for the Grid Trading Tool.
 
-Two main configuration files are used:
-1. config.ini: System-wide configuration containing default settings and 
-   configurations that should not be directly modified by users.
-2. userconfig.ini: User-specific configuration containing user preferences 
-   and settings that can be modified through the application.
-
-The system config (config.ini) should include:
-- Default values for trading parameters
-- GUI settings
-- Available APIs
-- Default common stocks
-
-The user config (userconfig.ini) should include:
-- User's API choice and API keys
-- User's preferred allocation method
-- User's common stocks
-- Recent calculation parameters
+It manages two main configuration files:
+1. config.ini: System-wide configuration with default settings.
+2. userconfig.ini: User-specific configuration with customizable settings.
 
 This separation allows for easier updates and prevents user settings 
 from being overwritten during application updates.
 """
 
-# ... rest of the file content ...
 import os
 import io
-import json
 import configparser
 import logging
 from typing import Dict, Any
@@ -76,10 +60,20 @@ DEFAULT_USER_CONFIG = {
     },
     'CommonStocks': {
         'stock1': 'AAPL',
-        'stock2': 'GOOGL',
+        'stock2': 'SOXL',
         'stock3': 'UPST',
-        'stock4': 'TSLA',
-        'stock5': 'SOXL'
+        'stock4': 'OXY',
+        'stock5': 'DE'
+    },
+    'MoomooSettings': {
+        'trade_mode': '模拟',
+        'market': '港股'
+    },
+    'MoomooAPI': {
+        'host': '127.0.0.1',
+        'port': '11111',
+        'trade_env': 'REAL',
+        'security_firm': 'FUTUINC'
     },
     'RecentCalculations': {
         'funds': '50000.0',
@@ -119,7 +113,22 @@ def load_user_config() -> Dict[str, Any]:
     if os.path.exists(config_path):
         with io.open(config_path, 'r', encoding='utf-8') as f:
             config.read_file(f)
-    return {section: dict(config[section]) for section in config.sections()}
+    
+    user_config = {section: dict(config[section]) for section in config.sections()}
+    
+    # 如果配置为空，返回默认配置
+    if not user_config:
+        return DEFAULT_USER_CONFIG.copy()
+    
+    # 使用默认配置填充缺失的部分
+    for section, values in DEFAULT_USER_CONFIG.items():
+        if section not in user_config:
+            user_config[section] = {}
+        for key, default_value in values.items():
+            if key not in user_config[section]:
+                user_config[section][key] = default_value
+    
+    return user_config
 
 def save_user_config(config: Dict[str, Any]) -> None:
     config_parser = configparser.ConfigParser()
@@ -131,16 +140,3 @@ def save_user_config(config: Dict[str, Any]) -> None:
         config_parser.write(configfile)
     logger.info(f"用户配置已保存到 {config_path}")
 
-def convert_json_to_ini(json_file: str = 'config.json', ini_file: str = SYSTEM_CONFIG_FILE):
-    try:
-        json_path = os.path.join(get_project_root(), json_file)
-        ini_path = os.path.join(get_project_root(), ini_file)
-
-        with open(json_path, 'r') as f:
-            json_config = json.load(f)
-
-        config = {'General': {k: str(v) for k, v in json_config.items()}}
-        save_system_config(config, ini_file)
-        logger.info(f"JSON 配置已转换并保存为 INI 格式: {ini_path}")
-    except Exception as e:
-        logger.error(f"转换 JSON 到 INI 失败: {str(e)}")
