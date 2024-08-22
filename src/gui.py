@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
 from datetime import datetime
 from typing import Dict, Any, Callable, Optional, List
-from moomoo import TrdEnv, TrdMarket
+from moomoo import TrdEnv, TrdMarket, TrdSide
 
 # 更新 API 相关的导入
 from src.api_manager import APIManager, APIError
@@ -39,6 +39,7 @@ class App:
     Grid Trading Tool 的主应用类。
     管理GUI界面和用户交互。
     """
+    force_simulate: bool
     DEFAULT_WINDOW_WIDTH = 750
     DEFAULT_WINDOW_HEIGHT = 700
 
@@ -81,6 +82,8 @@ class App:
         self.last_connected_env = None
         self.last_connected_market = None
         self.moomoo_api = MoomooAPI()
+        self.current_acc_id = None
+        self.force_simulate = True
         
         # Connection thread management
         self.connection_thread = None
@@ -144,6 +147,7 @@ class App:
 
     def create_widgets(self) -> None:
         """创建并布局所有GUI组件"""
+        self.ensure_attributes()
         try:
             self.create_main_frame()
             self.create_status_bar()
@@ -350,18 +354,34 @@ class App:
         moomoo_frame = ttk.LabelFrame(parent_frame, text="Moomoo设置")
         moomoo_frame.grid(row=0, column=2, sticky="nsew", padx=(5, 0), pady=5)
 
-        ttk.Radiobutton(moomoo_frame, text="真实", variable=self.trade_mode_var, value="真实").grid(row=0, column=0, sticky="w")
+        self.real_radio = ttk.Radiobutton(moomoo_frame, text="真实", variable=self.trade_mode_var, value="真实")
+        self.real_radio.grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(moomoo_frame, text="模拟", variable=self.trade_mode_var, value="模拟").grid(row=0, column=1, sticky="w")
 
         ttk.Radiobutton(moomoo_frame, text="美股", variable=self.market_var, value="美股").grid(row=1, column=0, sticky="w")
         ttk.Radiobutton(moomoo_frame, text="港股", variable=self.market_var, value="港股").grid(row=1, column=1, sticky="w")
 
         ttk.Button(moomoo_frame, text="测试连接", command=self.test_moomoo_connection).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        ttk.Button(moomoo_frame, text="切换强制模拟模式", command=self.toggle_force_simulate).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        self.update_moomoo_settings_state()
 
+    def update_moomoo_settings_state(self):
+        if hasattr(self, 'force_simulate') and self.force_simulate:
+            self.real_radio.config(state="disabled")
+            self.trade_mode_var.set("模拟")
+        else:
+            self.real_radio.config(state="normal")
+                
     def test_moomoo_connection(self):
-        self.trade_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
-        self.market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
+        if self.force_simulate:
+            self.trade_env = TrdEnv.SIMULATE
+        else:
+            self.trade_env = TrdEnv.REAL if self.trade_mode_var.get() == "真实" else TrdEnv.SIMULATE
         
+        self.update_moomoo_settings_state()
+        
+        self.market = TrdMarket.US if self.market_var.get() == "美股" else TrdMarket.HK
+
         env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
         market_str = "美股" if self.market == TrdMarket.US else "港股"
         
@@ -987,61 +1007,98 @@ class App:
         messagebox.showinfo("实时通知", message)
 
     def place_order_by_plan(self):
-        if not self.check_moomoo_connection():
+        if self.force_simulate:
+            self.trade_env = TrdEnv.SIMULATE
+            self.display_results("注意：当前处于强制模拟模式，所有交易将在模拟环境中执行。")
+        elif self.trade_env == TrdEnv.REAL:
+            confirm = messagebox.askyesno("确认", "您即将在真实环境中下单，是否确认？")
+            if not confirm:
+                self.display_results("已取消在真实环境中下单。")
+                return
+            
+        if not self.moomoo_connected:
+            self.display_results("错误：请先在Moomoo设置中完成测试连接")
+            self.update_status("Moomoo API 未连接")
             return
-        
+
         current_result = self.result_text.get("1.0", tk.END).strip()
-        
-        if not current_result or "错误" in current_result:
-            message = "当前没有有效的购买计划。请先运行计算。"
-            self.display_results(message)
+        if not current_result:
+            self.display_results("错误：当前没有有效的购买计划。请先运行计算。")
+            self.update_status("无效的购买计划")
             return
-        
-        # 从计算结果中提取标的
+
+        # 检查是否有标的
+        if "标的:" not in current_result:
+            self.display_results("错误：当前购买计划中没有指定标的。请重新计算包含标的的购买计划。")
+            self.update_status("无效的购买计划：缺少标的")
+            return
+
+        # 解析标的和计划细节
         lines = current_result.split('\n')
-        symbol_line = next((line for line in lines if line.startswith("标的:")), None)
-        if symbol_line:
-            self.current_symbol = symbol_line.split(":")[1].strip()
-        
-        if not self.current_symbol:
-            message = "无法识别当前标的。请确保已正确计算并显示计划。"
-            self.display_results(message)
-            return
-        
-        # 解析计算结果以获取计划细节
+        self.current_symbol = lines[0].split(":")[1].strip()
         plan = []
         for line in lines:
             if "价格:" in line and "购买股数:" in line:
                 parts = line.split(",")
                 if len(parts) >= 2:
                     price = float(parts[0].split(":")[1].strip())
-                    quantity = int(parts[1].split(":")[1].strip())
+                    quantity = int(parts[1].split("购买股数:")[1].strip())
                     plan.append({"price": price, "quantity": quantity})
-        
+
         if not plan:
-            message = "无法解析购买计划。请确保已正确计算并显示计划。"
-            self.display_results(message)
+            self.display_results("错误：无法解析购买计划。请确保已正确计算并显示计划。")
+            self.update_status("购买计划解析失败")
             return
-        
+
+        # 获取账户列表
+        acc_list = self.moomoo_api.get_acc_list(self.trade_env, self.market)
+        if acc_list is None or acc_list.empty:
+            self.display_results("错误：无法获取账户列表")
+            self.update_status("账户列表获取失败")
+            return
+
+        # 选择账户
+        if len(acc_list) == 1:
+            selected_acc_id = acc_list.iloc[0]['acc_id']
+        else:
+            options = [f"{acc['acc_id']} - {acc['acc_type']}" for _, acc in acc_list.iterrows()]
+            choice = simpledialog.askstring("选择账户", "请选择要使用的账户：", initialvalue=options[0])
+            if choice is None:
+                self.update_status("账户选择已取消")
+                return
+            selected_acc_id = int(choice.split(' - ')[0])
+
+        # 确认下单
         env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
         market_str = "美股" if self.market == TrdMarket.US else "港股"
-        message = f"当前连接: {market_str}{env_str}账户\n"
-        message += f"准备按计划为标的 {self.current_symbol} 下单。\n"
-        message += "注意：这是在模拟系统中进行的测试，实际下单风险自负。\n\n"
+        message = f"准备按计划为标的 {self.current_symbol} 下单。\n"
+        message += f"当前连接: {market_str}{env_str}账户\n"
+        message += f"选择的账户ID: {selected_acc_id}\n"
+        message += "注意：这将执行实际的交易操作。\n\n"
         message += "当前计划：\n"
-        message += f"标的：{self.current_symbol}\n"
-        message += "购买计划：\n"
         for item in plan:
             message += f"  价格: {item['price']:.2f}, 数量: {item['quantity']}\n"
-        
-        message += "\n是否确认按此计划下单？"
-        
-        if messagebox.askyesno("确认下单", message):
-            # 这里应该是实际下单的逻辑，目前我们只是显示一个确认消息
-            self.display_results(f"模拟下单成功！实际环境中，订单将按计划执行。\n当前连接: {market_str}{env_str}账户")
-            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 模拟下单完成")
+
+        self.display_results(message)
+        if messagebox.askyesno("确认下单", "是否确认执行上述下单计划？"):
+            for item in plan:
+                result = self.moomoo_api.place_order(
+                    acc_id=selected_acc_id,
+                    trade_env=self.trade_env,
+                    market=self.market,
+                    code=self.current_symbol,
+                    price=item['price'],
+                    qty=item['quantity'],
+                    trd_side=TrdSide.BUY
+                )
+                if result is not None:
+                    self.display_results(f"下单成功：价格 {item['price']:.2f}, 数量 {item['quantity']}")
+                else:
+                    self.display_results(f"下单失败：价格 {item['price']:.2f}, 数量 {item['quantity']}")
+
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 下单完成")
         else:
-            self.display_results(f"已取消下单。\n当前连接: {market_str}{env_str}账户")
+            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 已取消下单")
 
     def query_positions(self):
         if not self.check_moomoo_connection():
@@ -1256,6 +1313,20 @@ class App:
         self.is_closing = True
         self.save_user_settings()
         self.master.destroy()
+
+    def toggle_force_simulate(self):
+        self.force_simulate = not self.force_simulate
+        self.update_moomoo_settings_state()
+        status = "启用" if self.force_simulate else "禁用"
+        self.display_results(f"强制模拟模式已{status}")
+        self.update_status(f"强制模拟模式: {status}")
+
+    def ensure_attributes(self):
+        if not hasattr(self, 'force_simulate'):
+            self.force_simulate = True
+        if not hasattr(self, 'real_radio'):
+            self.real_radio = None
+    
 
 class UserConfigWindow(tk.Toplevel):
     def __init__(self, parent, user_config):

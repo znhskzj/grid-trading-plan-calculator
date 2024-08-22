@@ -1,7 +1,7 @@
 # src/api_interface.py
 
 from typing import Dict, Optional
-from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, SecurityFirm, RET_OK, Currency
+from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, SecurityFirm, RET_OK, Currency, TrdSide
 import configparser
 import pandas as pd
 import os
@@ -151,5 +151,35 @@ class MoomooAPI:
         except Exception as e:
             logger.exception(f"获取持仓信息时发生错误：{str(e)}")
             return None
+
+def place_order(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, 
+                code: str, price: float, qty: float, trd_side: TrdSide) -> Optional[pd.DataFrame]:
+    try:
+        with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
+            ret, data = trd_ctx.place_order(price=price, qty=qty, code=code, trd_side=trd_side, 
+                                            acc_id=acc_id, trd_env=trade_env)
+        if ret == RET_OK:
+            logger.info(f"Successfully placed order: {data.to_dict()}")
+            return data
+        else:
+            logger.error(f'下单失败：{data}')
+            return None
+    except Exception as e:
+        logger.exception(f"下单时发生错误：{str(e)}")
+        return None
+
+def unlock_trade(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, password: str) -> bool:
+    try:
+        with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
+            ret, data = trd_ctx.unlock_trade(password, acc_id=acc_id, trd_env=trade_env)
+        if ret == RET_OK:
+            logger.info("Successfully unlocked trade")
+            return True
+        else:
+            logger.error(f'解锁交易失败：{data}')
+            return False
+    except Exception as e:
+        logger.exception(f"解锁交易时发生错误：{str(e)}")
+        return False
 
 moomoo_api = MoomooAPI()    
