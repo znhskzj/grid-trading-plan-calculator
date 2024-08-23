@@ -4,13 +4,14 @@ from __future__ import annotations
 import csv
 import logging
 import os
+import re
 import time
 import json
 import threading
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Callable, Optional, List
 from moomoo import TrdEnv, TrdMarket, TrdSide
 
@@ -58,6 +59,9 @@ class App:
         self.current_symbol = None
         self.status_bar = None
 
+        self.master.grid_rowconfigure(0, weight=1)
+        self.master.grid_columnconfigure(0, weight=1)
+
         self.load_configurations()
         self.ensure_config_structure()
         self.setup_variables()
@@ -88,6 +92,8 @@ class App:
         # Connection thread management
         self.connection_thread = None
         self.stop_connection_attempts = threading.Event()
+        self.master.update_idletasks()
+        self.master.after(100, self.check_widget_visibility)
 
     def ensure_config_structure(self):
         for section, values in DEFAULT_USER_CONFIG.items():
@@ -160,18 +166,18 @@ class App:
     def create_main_frame(self):
         """创建主框架"""
         self.main_frame = ttk.Frame(self.master)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.main_frame.grid_columnconfigure(1, weight=1)
 
     def create_status_bar(self):
         """创建状态栏"""
         self.status_bar = ttk.Label(self.master, text="就绪", relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+        self.status_bar.grid(row=1, column=0, sticky="ew")
 
     def create_left_frame(self):
         """创建左侧框架"""
-        self.left_frame = ttk.Frame(self.main_frame, width=120)
-        self.left_frame.grid(row=0, column=0, sticky="ns")
+        self.left_frame = ttk.Frame(self.main_frame, width=100)
+        self.left_frame.grid(row=0, column=0, sticky="ns", padx=(0, 5))  # 减小右侧padding
         self.left_frame.grid_propagate(False)
         self.create_left_widgets()
 
@@ -183,40 +189,39 @@ class App:
         self.create_right_widgets()
 
     def create_result_frame(self):
-        """创建结果显示区域"""
         self.result_frame = ttk.Frame(self.main_frame, relief=tk.SUNKEN, borderwidth=1)
-        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(0, 10), padx=10)
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
         
-        text_container = ttk.Frame(self.result_frame)
-        text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(0, weight=1)
         
-        self.result_text = tk.Text(text_container, height=20, wrap=tk.WORD)  # 修改：增加 height 值
-        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.result_text = scrolledtext.ScrolledText(self.result_frame, wrap=tk.WORD)
+        self.result_text.grid(row=0, column=0, sticky="nsew")
         
-        scrollbar = ttk.Scrollbar(text_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.result_text.config(yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.result_text.yview)
+        self.result_frame.grid_rowconfigure(0, weight=1)
+        self.result_frame.grid_columnconfigure(0, weight=1)
 
     def create_left_widgets(self):
         """创建左侧组件"""
         self.common_stocks_button = ttk.Button(self.left_frame, text="常用标的", width=10, command=self.toggle_common_stocks)
-        self.common_stocks_button.pack(pady=(0, 5))
+        self.common_stocks_button.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
 
         self.common_stocks_frame = ttk.Frame(self.left_frame)
-        self.common_stocks_frame.pack(fill=tk.Y, expand=True)
+        self.common_stocks_frame.grid(row=1, column=0, sticky="nsew", padx=2, pady=2)
+        self.left_frame.grid_rowconfigure(1, weight=1)
+        self.left_frame.grid_columnconfigure(0, weight=1)
+
         common_stocks = self.user_config.get('CommonStocks', {})
         self.update_common_stocks(common_stocks)
         
     def toggle_common_stocks(self):
         """切换常用标的的显示状态"""
         if self.common_stocks_frame.winfo_viewable():
-            self.common_stocks_frame.pack_forget()
-            self.common_stocks_button.config(text="显示常用标的")
+            self.common_stocks_frame.grid_remove()
+            self.common_stocks_button.config(text="常用标的")
         else:
-            self.common_stocks_frame.pack(fill=tk.Y, expand=True)
-            self.common_stocks_button.config(text="隐藏常用标的")
+            self.common_stocks_frame.grid()
+            self.common_stocks_button.config(text="隐藏标的")
 
     def update_common_stocks(self, stocks):
         """更新常用股票列表"""
@@ -226,17 +231,17 @@ class App:
         if isinstance(stocks, dict):
             stocks = stocks.values()
         
-        for symbol in stocks:
+        for i, symbol in enumerate(stocks):
             if symbol and symbol.strip():
                 btn = ttk.Button(self.common_stocks_frame, text=symbol.strip(), width=10,
                                 command=lambda s=symbol.strip(): self.set_stock_price(s))
-                btn.pack(pady=2)
+                btn.grid(row=i, column=0, pady=2)
         
         # 确保常用标的按钮显示正确的文本
         if self.common_stocks_frame.winfo_children():
-            self.common_stocks_button.config(text="隐藏常用标的")
+            self.common_stocks_button.config(text="隐藏标的")
         else:
-            self.common_stocks_button.config(text="显示常用标的")
+            self.common_stocks_button.config(text="显示标的")
 
     def create_right_widgets(self) -> None:
         """创建右侧组件"""
@@ -404,8 +409,8 @@ class App:
             result = self.moomoo_api.test_moomoo_connection(self.trade_env, self.market)
             if result:
                 success_message = f"Moomoo API 连接成功！\n已连接到{market_str}{env_str}账户。"
-                self.display_results(success_message)
-                self.update_status(f"Moomoo API 已连接 - {market_str}{env_str}账户")
+                self.master.after(0, lambda: self.display_results(success_message))
+                self.master.after(0, lambda: self.update_status(f"Moomoo API 已连接 - {market_str}{env_str}账户"))
                 self.moomoo_connected = True
                 self.last_connected_env = self.trade_env
                 self.last_connected_market = self.market
@@ -429,29 +434,46 @@ class App:
         logger.info("开始运行计算...")
         self.update_status("开始计算购买计划...")
         try:
-            instruction = self.instruction_var.get().strip()
-            default_instruction = "例：SOXL现价到37.5之间分批买，压力39+，止损36.8"
-            logger.debug(f"交易指令: {instruction}")
+            input_values = self.get_input_values()
             
-            instruction_info = ""
-            if instruction and instruction != default_instruction:
-                logger.info("检测到交易指令，开始处理...")
-                parsed_instruction = parse_trading_instruction(instruction)
-                if self._validate_instruction(parsed_instruction):
-                    instruction_info = self._display_instruction_results(instruction, parsed_instruction)
-                    self._update_fields_from_instruction(parsed_instruction)
-                else:
-                    raise ValueError("指令中缺少必要的信息")
+            result = ""
+            if self.current_symbol:
+                result += f"标的: {self.current_symbol}\n"
+                logger.info(f"计算购买计划，标的: {self.current_symbol}")
+            else:
+                logger.warning("当前没有设置标的")
+                result += "警告: 未设置标的\n"
             
-            self._run_normal_calculation(instruction_info)
+            total_funds = input_values['funds']
+            result += f"总资金: {total_funds:.2f} | 可用资金: {total_funds:.2f}\n"
+            result += f"初始价格: {input_values['initial_price']:.2f} | 止损价格: {input_values['stop_loss_price']:.2f} | 网格数量: {input_values['num_grids']}\n"
             
-            logger.debug(f"当前股票代码: {self.current_symbol}")
+            calculation_result = run_calculation(input_values)
+            
+            # 移除重复的总资金、初始价格和止损价格信息
+            calculation_result = re.sub(r"总资金:.*\n", "", calculation_result)
+            calculation_result = re.sub(r"初始价格:.*\n", "", calculation_result)
+            calculation_result = re.sub(r"止损价格:.*\n", "", calculation_result)
+            
+            result += calculation_result
+            
+            if not result.strip():
+                result = "没有计算结果。请确保所有输入字段都已填写，并且有效。"
+
+            self.display_results(result)
+            self.update_status("计算完成")
+            
+            logger.debug(f"计算完成，当前股票代码: {self.current_symbol}")
         except ValueError as ve:
-            logger.error(f"输入错误: {str(ve)}")
-            self.handle_calculation_error("输入错误", ve)
+            error_message = f"输入错误: {str(ve)}"
+            logger.error(error_message)
+            self.display_results(error_message)
+            self.update_status("计算失败：输入错误")
         except Exception as e:
-            logger.error(f"计算过程中发生错误: {str(e)}", exc_info=True)
-            self.handle_calculation_error("计算过程中发生错误", e)
+            error_message = f"计算过程中发生错误: {str(e)}"
+            logger.error(error_message, exc_info=True)
+            self.display_results(error_message)
+            self.update_status("计算失败：未知错误")
 
     def handle_calculation_error(self, message: str, exception: Exception) -> None:
         """处理计算过程中的错误"""
@@ -460,7 +482,7 @@ class App:
         self.display_results(error_message)
         logger.error(error_message, exc_info=True)
 
-    def _run_normal_calculation(self, instruction_info: str = "") -> None:
+    def _run_normal_calculation(self) -> None:
         try:
             input_values = self.get_input_values()
             
@@ -472,13 +494,18 @@ class App:
                 return
 
             total_funds = input_values['funds']
-            result = instruction_info  # 添加指令信息（如果有的话）
-            result += f"标的: {self.current_symbol}\n" if self.current_symbol else ""
-            result += f"总资金: {total_funds:.2f}\n"
-            result += f"可用资金: {total_funds:.2f}\n"
-            result += f"初始价格: {input_values['initial_price']:.2f}\n"
-            result += f"止损价格: {input_values['stop_loss_price']:.2f}\n"
-            result += f"网格数量: {input_values['num_grids']}\n"
+            result = ""
+            
+            # 确保显示标的信息
+            if self.current_symbol:
+                result += f"标的: {self.current_symbol}\n"
+                logger.info(f"计算购买计划，标的: {self.current_symbol}")
+            else:
+                logger.warning("当前没有设置标的")
+                result += "警告: 未设置标的\n"
+            
+            result += f"总资金: {total_funds:.2f} | 可用资金: {total_funds:.2f}\n"
+            result += f"初始价格: {input_values['initial_price']:.2f} | 止损价格: {input_values['stop_loss_price']:.2f} | 网格数量: {input_values['num_grids']}\n"
             
             # 运行计算逻辑...
             calculation_result = run_calculation(input_values)
@@ -497,32 +524,21 @@ class App:
     def calculate_with_reserve(self, reserve_percentage: int) -> None:
         self.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
         try:
-            instruction = self.instruction_var.get().strip()
-            default_instruction = "例：SOXL现价到37.5之间分批买，压力39+，止损36.8"
-            
-            instruction_info = ""
-            if instruction and instruction != default_instruction:
-                logger.info("检测到交易指令，开始处理...")
-                parsed_instruction = parse_trading_instruction(instruction)
-                if self._validate_instruction(parsed_instruction):
-                    instruction_info = self._display_instruction_results(instruction, parsed_instruction)
-                    self._update_fields_from_instruction(parsed_instruction)
-                else:
-                    raise ValueError("指令中缺少必要的信息")
-            
             input_values = self.get_input_values()
             total_funds = input_values['funds']
             reserve_amount = total_funds * (reserve_percentage / 100)
             available_funds = total_funds - reserve_amount
             
-            result = instruction_info  # 添加指令信息（如果有的话）
-            result += f"标的: {self.current_symbol}\n" if self.current_symbol else ""
-            result += f"总资金: {total_funds:.2f}\n"
-            result += f"保留资金: {reserve_amount:.2f}\n"
-            result += f"可用资金: {available_funds:.2f}\n"
-            result += f"初始价格: {input_values['initial_price']:.2f}\n"
-            result += f"止损价格: {input_values['stop_loss_price']:.2f}\n"
-            result += f"网格数量: {input_values['num_grids']}\n"
+            result = ""
+            if self.current_symbol:
+                result += f"标的: {self.current_symbol}\n"
+                logger.info(f"计算购买计划（保留{reserve_percentage}%资金），标的: {self.current_symbol}")
+            else:
+                logger.warning("当前没有设置标的")
+                result += "警告: 未设置标的\n"
+            
+            result += f"总资金: {total_funds:.2f} | 保留资金: {reserve_amount:.2f} | 可用资金: {available_funds:.2f}\n"
+            result += f"初始价格: {input_values['initial_price']:.2f} | 止损价格: {input_values['stop_loss_price']:.2f} | 网格数量: {input_values['num_grids']}\n"
             
             # 使用可用资金进行计算
             input_values['funds'] = available_funds
@@ -535,6 +551,11 @@ class App:
                 return
 
             calculation_result = run_calculation(input_values)
+            
+            # 移除重复的总资金、初始价格和止损价格信息
+            calculation_result = re.sub(r"总资金:.*\n", "", calculation_result)
+            calculation_result = re.sub(r"初始价格:.*\n", "", calculation_result)
+            calculation_result = re.sub(r"止损价格:.*\n", "", calculation_result)
             
             result += calculation_result
             
@@ -565,19 +586,30 @@ class App:
             logger.error(f"输入值转换错误: {str(e)}")
             raise ValueError("请确保所有输入都是有效的数字") from e
 
-    import logging
-
     def display_results(self, result: str) -> None:
         logging.debug(f"Input result to display_results: {result}")
-        lines = result.split('\n')
-        formatted_lines = self._format_result_lines(lines)
-        formatted_result = '\n'.join(formatted_lines)
         
-        logging.debug(f"Formatted result: {formatted_result}")
+        def update_result_text():
+            if not hasattr(self, 'result_text'):
+                logging.error("result_text widget not found")
+                return
+
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(tk.END, result)
+            self.result_text.see("1.0")  # 滚动到顶部
+
+            self.result_frame.update()
+            self.result_text.update()
+            self.master.update_idletasks()
+
+            logging.debug("Results displayed in result_text widget")
+            self.check_widget_visibility()
+
+        self.master.after(0, update_result_text)
         
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, formatted_result)
-        self.result_text.see("1.0")  # 滚动到顶部
+        # 更新状态栏
+        first_line = result.split('\n')[0] if result else "无结果"
+        self.update_status(first_line)
 
     def _format_result_lines(self, lines: List[str]) -> List[str]:
         logging.debug(f"Input lines to _format_result_lines: {lines}")
@@ -601,33 +633,40 @@ class App:
     def _format_trading_plan(self, lines: List[str]) -> List[str]:
         formatted_lines = []
 
+        # 处理警告信息
+        warning_line = next((line for line in lines if line.startswith("警告:")), None)
+        if warning_line:
+            formatted_lines.append(warning_line)
+
         # 格式化资金信息
-        funds_info = ' | '.join(line.strip() for line in lines[:3] if line.strip())
-        formatted_lines.append(funds_info)
-        
+        funds_info = next((line for line in lines if line.startswith("总资金:")), "")
+        if funds_info:
+            formatted_lines.append(funds_info)
+
         # 格式化价格和网格信息
-        price_grid_info = ' | '.join(line.strip() for line in lines[3:6] if line.strip())
-        formatted_lines.append(price_grid_info)
-        
-        # 移除重复的信息
-        unique_lines = [line for line in lines[6:] if line.strip() and not line.startswith(("总资金:", "初始价格:", "止损价格:", "网格数量:"))]
-        
+        price_grid_info = next((line for line in lines if line.startswith("初始价格:")), "")
+        if price_grid_info:
+            formatted_lines.append(price_grid_info)
+
         # 处理分配方式信息
-        allocation_info = ' | '.join(line.strip() for line in unique_lines[:3] if line.strip())
-        formatted_lines.append(allocation_info)
-        
+        allocation_info = next((line for line in lines if "选择的分配方式:" in line), "")
+        if allocation_info:
+            formatted_lines.append(allocation_info)
+
+        # 处理分配特点
+        distribution_feature = next((line for line in lines if "分配特点:" in line), "")
+        if distribution_feature:
+            formatted_lines.append(distribution_feature)
+
         # 处理购买计划
-        purchase_plan = [line for line in unique_lines if line.startswith("价格:")]
+        purchase_plan = [line for line in lines if line.startswith("价格:")]
         if purchase_plan:
             formatted_lines.append("购买计划如下：")
-            formatted_lines.extend(line.strip() for line in purchase_plan)
-        
+            formatted_lines.extend(purchase_plan)
+
         # 处理总结信息
-        summary_lines = [line for line in unique_lines if line.startswith(("总购买股数:", "总投资成本:", "平均购买价格:", "最大潜在亏损:", "最大亏损比例:"))]
-        if len(summary_lines) >= 3:
-            formatted_lines.append(" | ".join(summary_lines[:3]))
-        if len(summary_lines) >= 5:
-            formatted_lines.append(" | ".join(summary_lines[3:5]))
+        summary_lines = [line for line in lines if line.startswith(("总购买股数:", "总投资成本:", "平均购买价格:", "最大潜在亏损:", "最大亏损比例:"))]
+        formatted_lines.extend(summary_lines)
 
         return formatted_lines
     
@@ -853,13 +892,18 @@ class App:
 
     @exception_handler
     def set_stock_price(self, symbol: str) -> None:
-        """设置股票价格"""
+        logger.info(f"设置股票价格，标的: {symbol}")
         if self.api_choice.get() != self.api_manager.api_choice:
             self.initialize_api_manager()
 
         try:
             current_price, api_used = self.api_manager.get_stock_price(symbol)
             self._update_price_fields(symbol, current_price, api_used)
+            
+            # 添加这行来更新提示区
+            self.display_results(f"已更新股票 {symbol} 的价格：{current_price:.2f}")
+            
+            self.master.after(100, self.check_widget_visibility)
         except (APIError, ValueError) as e:
             self.handle_api_error(str(e), symbol)
         except Exception as e:
@@ -874,6 +918,7 @@ class App:
         self.initial_price_var.set(f"{current_price:.2f}")
         self.stop_loss_price_var.set(f"{stop_loss_price:.2f}")
         self.current_symbol = symbol
+        logger.info(f"更新价格字段，标的: {symbol}, 当前价格: {current_price:.2f}, 止损价格: {stop_loss_price:.2f}")
         status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
         self.update_status(status_message)
         result_message = (
@@ -883,7 +928,8 @@ class App:
             f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
         )
         self.display_results(result_message)
-    
+        self.master.update_idletasks()
+
     def handle_api_error(self, error_message: str, symbol: str):
         """处理API错误"""
         full_error_message = f"无法获取标的 {symbol} 的价格\n\n错误信息: {error_message}\n\n建议检查网络连接、API key 是否有效，或尝试切换到其他 API。"
@@ -904,15 +950,8 @@ class App:
             print(f"Status: {message}")  # 如果状态栏还未创建，则打印到控制台
 
     def _update_status_impl(self, message: str) -> None:
-            """实现 StatusManager 的 _update_status_impl 方法"""
-            if self.status_bar:
-                # 截断长消息
-                max_length = 100  # 可以根据需要调整
-                if len(message) > max_length:
-                    message = message[:max_length] + "..."
-                self.status_bar.config(text=message)
-            else:
-                print(f"Status: {message}")  # 如果状态栏还未创建，则打印到控制台
+        """实现 StatusManager 的 _update_status_impl 方法"""
+        self.update_status(message)
 
     def __del__(self) -> None:
         """析构函数，确保在程序退出时保存设置"""
@@ -957,8 +996,7 @@ class App:
             self.current_acc_id = None
             logger.warning("No accounts found")
 
-    def query_available_funds(self) -> None:
-        """查询可用资金"""
+    def query_available_funds(self):
         if not self._validate_account_access():
             return
         
@@ -976,25 +1014,31 @@ class App:
             return False
         return True
 
-    def _display_account_info(self, info: pd.DataFrame) -> None:
+    def _display_account_info(self, info: pd.DataFrame):
         env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
         market_str = "美股" if self.market == TrdMarket.US else "港股"
         result = f"当前连接: {market_str}{env_str}账户\n"
         result += f"账户 {self.current_acc_id} 资金情况:\n"
         
-        # 使用安全的格式化方法
         def safe_format(value):
             try:
-                return f"{float(value):.2f}" if value != 'N/A' else 'N/A'
+                return f"${float(value):,.2f}" if value != 'N/A' else 'N/A'
             except ValueError:
                 return str(value)
         
-        result += f"总资产: ${safe_format(info['total_assets'].values[0])}\n"
-        result += f"现金: ${safe_format(info['cash'].values[0])}\n"
-        result += f"证券市值: ${safe_format(info['securities_assets'].values[0])}\n"
-        result += f"购买力: ${safe_format(info['power'].values[0])}\n"
-        result += f"最大购买力: ${safe_format(info['max_power_short'].values[0])}\n"
-        result += f"币种: {info['currency'].values[0]}\n"
+        fields = [
+            ("总资产", 'total_assets'),
+            ("现金", 'cash'),
+            ("证券市值", 'securities_assets'),
+            ("购买力", 'power'),
+            ("最大购买力", 'max_power_short'),
+            ("币种", 'currency')
+        ]
+        
+        for label, key in fields:
+            value = safe_format(info[key].values[0])
+            if value != 'N/A' and value != '$N/A':
+                result += f"{label}: {value}\n"
         
         self.display_results(result)
         self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 资金查询完成")
@@ -1007,98 +1051,144 @@ class App:
         messagebox.showinfo("实时通知", message)
 
     def place_order_by_plan(self):
-        if self.force_simulate:
-            self.trade_env = TrdEnv.SIMULATE
-            self.display_results("注意：当前处于强制模拟模式，所有交易将在模拟环境中执行。")
-        elif self.trade_env == TrdEnv.REAL:
-            confirm = messagebox.askyesno("确认", "您即将在真实环境中下单，是否确认？")
-            if not confirm:
-                self.display_results("已取消在真实环境中下单。")
+        logger.info("开始执行按计划下单")
+        try:
+            if self.force_simulate:
+                self.trade_env = TrdEnv.SIMULATE
+                self.display_results("注意：当前处于强制模拟模式，所有交易将在模拟环境中执行。")
+                logger.info("强制模拟模式已启用")
+            elif self.trade_env == TrdEnv.REAL:
+                confirm = messagebox.askyesno("确认", "您即将在真实环境中下单，是否确认？")
+                if not confirm:
+                    self.display_results("已取消在真实环境中下单。")
+                    logger.info("用户取消了在真实环境中下单")
+                    return
+                
+            if not self.moomoo_connected:
+                self.display_results("错误：请先在Moomoo设置中完成测试连接")
+                self.update_status("Moomoo API 未连接")
+                logger.error("Moomoo API 未连接")
                 return
-            
-        if not self.moomoo_connected:
-            self.display_results("错误：请先在Moomoo设置中完成测试连接")
-            self.update_status("Moomoo API 未连接")
-            return
 
-        current_result = self.result_text.get("1.0", tk.END).strip()
-        if not current_result:
-            self.display_results("错误：当前没有有效的购买计划。请先运行计算。")
-            self.update_status("无效的购买计划")
-            return
-
-        # 检查是否有标的
-        if "标的:" not in current_result:
-            self.display_results("错误：当前购买计划中没有指定标的。请重新计算包含标的的购买计划。")
-            self.update_status("无效的购买计划：缺少标的")
-            return
-
-        # 解析标的和计划细节
-        lines = current_result.split('\n')
-        self.current_symbol = lines[0].split(":")[1].strip()
-        plan = []
-        for line in lines:
-            if "价格:" in line and "购买股数:" in line:
-                parts = line.split(",")
-                if len(parts) >= 2:
-                    price = float(parts[0].split(":")[1].strip())
-                    quantity = int(parts[1].split("购买股数:")[1].strip())
-                    plan.append({"price": price, "quantity": quantity})
-
-        if not plan:
-            self.display_results("错误：无法解析购买计划。请确保已正确计算并显示计划。")
-            self.update_status("购买计划解析失败")
-            return
-
-        # 获取账户列表
-        acc_list = self.moomoo_api.get_acc_list(self.trade_env, self.market)
-        if acc_list is None or acc_list.empty:
-            self.display_results("错误：无法获取账户列表")
-            self.update_status("账户列表获取失败")
-            return
-
-        # 选择账户
-        if len(acc_list) == 1:
-            selected_acc_id = acc_list.iloc[0]['acc_id']
-        else:
-            options = [f"{acc['acc_id']} - {acc['acc_type']}" for _, acc in acc_list.iterrows()]
-            choice = simpledialog.askstring("选择账户", "请选择要使用的账户：", initialvalue=options[0])
-            if choice is None:
-                self.update_status("账户选择已取消")
+            current_result = self.result_text.get("1.0", tk.END).strip()
+            if not current_result:
+                self.display_results("错误：当前没有有效的购买计划。请先运行计算。")
+                self.update_status("无效的购买计划")
+                logger.error("无效的购买计划")
                 return
-            selected_acc_id = int(choice.split(' - ')[0])
 
-        # 确认下单
-        env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
-        market_str = "美股" if self.market == TrdMarket.US else "港股"
-        message = f"准备按计划为标的 {self.current_symbol} 下单。\n"
-        message += f"当前连接: {market_str}{env_str}账户\n"
-        message += f"选择的账户ID: {selected_acc_id}\n"
-        message += "注意：这将执行实际的交易操作。\n\n"
-        message += "当前计划：\n"
-        for item in plan:
-            message += f"  价格: {item['price']:.2f}, 数量: {item['quantity']}\n"
+            logger.debug(f"当前结果文本: {current_result}")
 
-        self.display_results(message)
-        if messagebox.askyesno("确认下单", "是否确认执行上述下单计划？"):
+            # 解析标的和计划细节
+            lines = current_result.split('\n')
+            self.current_symbol = None
+            for line in lines:
+                if line.startswith("标的:"):
+                    self.current_symbol = line.split(":")[1].strip()
+                    break
+                elif "警告: 未设置标的" in line:
+                    self.current_symbol = None
+                    break
+
+            if not self.current_symbol:
+                logger.error("当前购买计划中没有指定标的")
+                self.display_results("错误：当前购买计划中没有指定标的。请重新计算包含标的的购买计划。")
+                self.update_status("无效的购买计划：缺少标的")
+                return
+
+            logger.info(f"准备下单，标的: {self.current_symbol}")
+
+            # 解析计划细节
+            plan = []
+            for line in lines:
+                if "价格:" in line and "购买股数:" in line:
+                    parts = line.split(",")
+                    if len(parts) >= 2:
+                        price = float(parts[0].split(":")[1].strip())
+                        quantity = int(parts[1].split("购买股数:")[1].strip())
+                        plan.append({"price": price, "quantity": quantity})
+
+            if not plan:
+                self.display_results("错误：无法解析购买计划。请确保已正确计算并显示计划。")
+                self.update_status("购买计划解析失败")
+                logger.error("购买计划解析失败")
+                return
+
+            # 获取账户列表
+            acc_list = self.moomoo_api.get_acc_list(self.trade_env, self.market)
+            if acc_list is None or acc_list.empty:
+                self.display_results("错误：无法获取账户列表")
+                self.update_status("账户列表获取失败")
+                logger.error("账户列表获取失败")
+                return
+
+            # 选择账户
+            if len(acc_list) == 1:
+                selected_acc_id = acc_list.iloc[0]['acc_id']
+                logger.info(f"自动选择唯一账户: {selected_acc_id}")
+            else:
+                options = [f"{acc['acc_id']} - {acc['acc_type']}" for _, acc in acc_list.iterrows()]
+                choice = simpledialog.askstring("选择账户", "请选择要使用的账户：", initialvalue=options[0])
+                if choice is None:
+                    self.update_status("账户选择已取消")
+                    logger.info("用户取消了账户选择")
+                    return
+                selected_acc_id = int(choice.split(' - ')[0])
+                logger.info(f"用户选择账户: {selected_acc_id}")
+
+            # 确认下单
+            env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+            market_str = "美股" if self.market == TrdMarket.US else "港股"
+            message = f"准备按计划为标的 {self.current_symbol} 下单。\n"
+            message += f"当前连接: {market_str}{env_str}账户\n"
+            message += f"选择的账户ID: {selected_acc_id}\n"
+            message += "注意：这将执行实际的交易操作。\n\n"
+            message += "当前计划：\n"
             for item in plan:
-                result = self.moomoo_api.place_order(
-                    acc_id=selected_acc_id,
-                    trade_env=self.trade_env,
-                    market=self.market,
-                    code=self.current_symbol,
-                    price=item['price'],
-                    qty=item['quantity'],
-                    trd_side=TrdSide.BUY
-                )
-                if result is not None:
-                    self.display_results(f"下单成功：价格 {item['price']:.2f}, 数量 {item['quantity']}")
-                else:
-                    self.display_results(f"下单失败：价格 {item['price']:.2f}, 数量 {item['quantity']}")
+                message += f"  价格: {item['price']:.2f}, 数量: {item['quantity']}\n"
 
-            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 下单完成")
-        else:
-            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 已取消下单")
+            self.display_results(message)
+            logger.info(f"下单确认信息: {message}")
+
+            if messagebox.askyesno("确认下单", "是否确认执行上述下单计划？"):
+                all_orders_successful = True
+                order_results = []
+                for item in plan:
+                    result = self.moomoo_api.place_order(
+                        acc_id=selected_acc_id,
+                        trade_env=self.trade_env,
+                        market=self.market,
+                        code=self.current_symbol,
+                        price=item['price'],
+                        qty=item['quantity'],
+                        trd_side=TrdSide.BUY
+                    )
+                    if result is not None:
+                        success_msg = f"下单成功：价格 {item['price']:.2f}, 数量 {item['quantity']}"
+                        order_results.append(success_msg)
+                        logger.info(f"下单成功：标的 {self.current_symbol}, {success_msg}")
+                    else:
+                        error_msg = f"下单失败：标的 {self.current_symbol}, 价格 {item['price']:.2f}, 数量 {item['quantity']}"
+                        order_results.append(error_msg)
+                        logger.error(error_msg)
+                        all_orders_successful = False
+
+                if all_orders_successful:
+                    final_message = f"Moomoo API - {market_str}{env_str}账户 - 所有订单下单成功"
+                else:
+                    final_message = f"Moomoo API - {market_str}{env_str}账户 - 部分或全部订单下单失败，请查看详细信息"
+                
+                detailed_results = "\n".join(order_results)
+                self.display_results(f"{final_message}\n\n详细信息：\n{detailed_results}")
+                logger.info(final_message)
+            else:
+                cancel_message = f"Moomoo API - {market_str}{env_str}账户 - 已取消下单"
+                self.display_results(cancel_message)
+                logger.info(cancel_message)
+        except Exception as e:
+            error_message = f"下单过程中发生错误: {str(e)}"
+            self.display_results(error_message)
+            logger.exception("下单过程中发生未预期的错误")
 
     def query_positions(self):
         if not self.check_moomoo_connection():
@@ -1116,17 +1206,19 @@ class App:
             result = f"当前连接: {market_str}{env_str}账户\n"
             result += f"查询账户 {self.current_acc_id} 持仓:\n"
             result += f"持仓股票数: {len(positions)}\n"
+            
+            # 调整字段宽度和对齐方式
             result += "{:<5}{:<10}{:<12}{:<15}{:<15}{:<15}\n".format(
                 "序号", "代码", "数量", "市值($)", "成本价", "盈亏比例(%)"
             )
-            result += "-" * 80 + "\n"
+            result += "-" * 75 + "\n"  # 减少分隔线长度
             
-            # 按市值降序排序
-            positions_sorted = positions.sort_values(by='market_val', ascending=False)
+            # 按市值降序排序，并重新赋予序号
+            positions_sorted = positions.sort_values(by='market_val', ascending=False).reset_index(drop=True)
             
             for index, row in positions_sorted.iterrows():
                 result += "{:<5}{:<10}{:<12,.2f}{:<15,.2f}{:<15,.2f}{:<15,.2f}\n".format(
-                    index+1,
+                    index + 1,
                     row['code'],
                     row['qty'],
                     row['market_val'],
@@ -1145,46 +1237,41 @@ class App:
             self.display_results("无法获取账户信息")
             return
         
-        orders = self.moomoo_api.get_history_orders(self.current_acc_id, self.trade_env, self.market)
-        if orders is not None and not orders.empty:
-            logger.info(f"User queried history orders for account {self.current_acc_id}")
-            
-            env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
-            market_str = "美股" if self.market == TrdMarket.US else "港股"
-            result = f"当前连接: {market_str}{env_str}账户\n"
-            result += f"查询账户 {self.current_acc_id} 历史订单:\n"
-            result += f"总订单数: {len(orders)}\n"
-            result += "最近10笔订单:\n"
-            result += "{:<5}{:<10}{:<8}{:<12}{:<15}{:<15}\n".format(
-                "序号", "代码", "方向", "数量", "价格", "创建日期"
-            )
-            result += "-" * 80 + "\n"
-            
-            for index, row in orders.head(10).iterrows():
-                create_time = row['create_time']
-                if isinstance(create_time, str):
-                    try:
-                        create_time = datetime.strptime(create_time, '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        try:
-                            create_time = datetime.strptime(create_time, '%Y-%m-%d %H:%M:%S')
-                        except ValueError:
-                            pass
+        try:
+            orders = self.moomoo_api.get_history_orders(self.current_acc_id, self.trade_env, self.market, include_cancelled=True, days=30)
+            if orders is not None and not orders.empty:
+                logger.info(f"User queried history orders for account {self.current_acc_id}")
                 
-                formatted_date = create_time.strftime('%Y-%m-%d') if isinstance(create_time, datetime) else str(create_time)
-                
-                result += "{:<5}{:<10}{:<8}{:<12,.2f}{:<15,.2f}{:<15}\n".format(
-                    index+1,
-                    row['code'],
-                    row['trd_side'],
-                    row['qty'],
-                    row['price'],
-                    formatted_date
+                env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+                market_str = "美股" if self.market == TrdMarket.US else "港股"
+                result = f"当前连接: {market_str}{env_str}账户\n"
+                result += f"查询账户 {self.current_acc_id} 历史订单:\n"
+                result += f"总订单数: {len(orders)}\n"
+                result += f"显示最近30天内的订单（最多显示20笔）:\n"
+                result += "{:<5}{:<10}{:<12}{:<15}{:<15}{:<15}\n".format(
+                    "序号", "代码", "方向", "数量", "价格", "创建日期"
                 )
-            self.display_results(result)
-            self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 历史订单查询完成")
-        else:
-            self.display_results("无法获取历史订单信息或没有历史订单")
+                result += "-" * 75 + "\n"  # 调整分割线长度
+                
+                for index, row in orders.head(20).iterrows():
+                    create_time = pd.to_datetime(row['create_time'])
+                    formatted_date = create_time.strftime('%Y-%m-%d')
+                    
+                    result += "{:<5}{:<10}{:<12}{:<15,.2f}{:<15,.2f}{:<15}\n".format(
+                        index+1,
+                        row['code'],
+                        row['trd_side'],
+                        row['qty'],
+                        row['price'],
+                        formatted_date
+                    )
+                self.display_results(result)
+                self.update_status(f"Moomoo API - {market_str}{env_str}账户 - 历史订单查询完成")
+            else:
+                self.display_results("无法获取历史订单信息或没有历史订单")
+        except Exception as e:
+            logger.exception(f"查询历史订单时发生错误：{str(e)}")
+            self.display_results(f"查询历史订单时发生错误：{str(e)}")
 
     def check_moomoo_connection(self) -> bool:
         # 检查Moomoo连接状态
@@ -1219,20 +1306,50 @@ class App:
         # 实现更新逻辑
         pass
 
-    def setup_layout(self) -> None:
-        """设置主窗口布局"""
+    def setup_layout(self):
         self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_rowconfigure(0, weight=1)
         
         self.main_frame.grid_columnconfigure(1, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=1)  # 修改：给上半部分更多空间
-        self.main_frame.grid_rowconfigure(1, weight=2)  # 修改：给结果显示区域更多空间
+        self.main_frame.grid_rowconfigure(1, weight=1)
         
-        self.right_frame.grid_columnconfigure(1, weight=1)
-        for i in range(10):
-            self.right_frame.grid_rowconfigure(i, weight=0)
+        self.left_frame.grid(row=0, column=0, sticky="ns")
+        self.right_frame.grid(row=0, column=1, sticky="nsew")
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        
+        self.master.update_idletasks()
+        self.check_widget_visibility()
 
-    from typing import Dict, Any
+    def check_widget_visibility(self):
+        if not hasattr(self, 'result_text'):
+            logging.error("result_text widget not found")
+            return
+        
+        logging.debug(f"Main window geometry: {self.master.winfo_geometry()}")
+        logging.debug(f"Main frame geometry: {self.main_frame.winfo_geometry()}")
+        logging.debug(f"Result frame geometry: {self.result_frame.winfo_geometry()}")
+        logging.debug(f"Result text geometry: {self.result_text.winfo_geometry()}")
+        
+        if not self.result_text.winfo_viewable():
+            logging.warning("Result text widget is not visible")
+        else:
+            logging.debug("Result text widget is visible")
+        
+        if not self.result_frame.winfo_viewable():
+            logging.warning("Result frame is not visible")
+        else:
+            logging.debug("Result frame is visible")
+        
+        # 检查是否有其他组件覆盖了结果文本框
+        overlapping_widgets = [w for w in self.master.winfo_children() if w.winfo_viewable() and w != self.result_frame]
+        if overlapping_widgets:
+            logging.warning(f"Potentially overlapping widgets: {overlapping_widgets}")
+            for widget in overlapping_widgets:
+                logging.debug(f"Overlapping widget info: {widget.winfo_class()}, {widget.winfo_geometry()}")
+        
+        # 检查结果框架的布局信息
+        layout_info = self.result_frame.grid_info()
+        logging.debug(f"Result frame layout info: {layout_info}")
 
     def process_instruction(self, instruction: str) -> None:
         """处理交易指令"""

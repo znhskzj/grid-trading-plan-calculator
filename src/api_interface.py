@@ -1,7 +1,11 @@
 # src/api_interface.py
 
+from datetime import datetime, timedelta
 from typing import Dict, Optional
-from moomoo import OpenSecTradeContext, TrdEnv, TrdMarket, SecurityFirm, RET_OK, Currency, TrdSide
+from moomoo import (
+    OpenSecTradeContext, TrdSide, OrderType, TrdEnv, TrdMarket, SecurityFirm,
+    RET_OK, Currency, OrderStatus
+)
 import configparser
 import pandas as pd
 import os
@@ -48,11 +52,11 @@ class MoomooAPI:
             try:
                 with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
                     ret, data = trd_ctx.get_acc_list()
-                if ret == RET_OK:
-                    logger.info(f"Moomoo API connection successful for {market} in {trade_env} mode")
-                    result[0] = True
-                else:
-                    logger.error(f"Moomoo API connection failed for {market} in {trade_env} mode: {data}")
+                    if ret == RET_OK:
+                        logger.info(f"Moomoo API connection successful for {market} in {trade_env} mode")
+                        result[0] = True
+                    else:
+                        logger.error(f"Moomoo API connection failed for {market} in {trade_env} mode: {data}")
             except Exception as e:
                 logger.exception(f"Error testing Moomoo connection for {market} in {trade_env} mode: {str(e)}")
                 exception[0] = e
@@ -111,10 +115,10 @@ class MoomooAPI:
                 logger.exception(f"选择账户时发生错误：{str(e)}")
                 return None
 
-    def get_account_info(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
+    def get_account_info(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, currency: Currency = Currency.USD) -> Optional[pd.DataFrame]:
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                ret, data = trd_ctx.accinfo_query(acc_id=acc_id, trd_env=trade_env, currency=Currency.USD)
+                ret, data = trd_ctx.accinfo_query(acc_id=acc_id, trd_env=trade_env, currency=currency)
             if ret == RET_OK:
                 return data
             else:
@@ -124,18 +128,39 @@ class MoomooAPI:
             logger.exception(f"获取账户信息时发生错误：{str(e)}")
             return None
 
-    def get_history_orders(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
+    def get_history_orders(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, include_cancelled: bool = False, days: int = 30) -> Optional[pd.DataFrame]:
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                ret, data = trd_ctx.history_order_list_query(acc_id=acc_id, trd_env=trade_env)
-            if ret == RET_OK:
-                logger.info(f"Successfully retrieved {len(data)} history orders")
-                return data
-            else:
-                logger.error(f'查询账户 {acc_id} 历史订单失败：{data}')
-                return None
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=days)
+                
+                status_filter_list = [] if include_cancelled else [
+                                    OrderStatus.SUBMITTED,
+                                    OrderStatus.FILLED_PART,
+                                    OrderStatus.FILLED_ALL,
+                                    OrderStatus.CANCELLED_PART,
+                                    OrderStatus.CANCELLED_ALL
+                                ]
+                
+                logger.debug(f"Querying history orders with parameters: acc_id={acc_id}, trade_env={trade_env}, market={market}, start={start_date.strftime('%Y-%m-%d')}, end={end_date.strftime('%Y-%m-%d')}, status_filter_list={status_filter_list}")
+                
+                ret, data = trd_ctx.history_order_list_query(
+                    status_filter_list=status_filter_list,
+                    start=start_date.strftime("%Y-%m-%d"),
+                    end=end_date.strftime("%Y-%m-%d"),
+                    trd_env=trade_env,
+                    acc_id=acc_id
+                )
+                
+                if ret == RET_OK:
+                    logger.info(f"Successfully retrieved {len(data)} historical orders from {start_date.date()} to {end_date.date()}")
+                    logger.debug(f"Data columns: {data.columns}")
+                    return data
+                else:
+                    logger.error(f'查询账户 {acc_id} 历史订单失败：{data}')
+                    return None
         except Exception as e:
-            logger.exception(f"获取历史订单时发生错误：{str(e)}")
+            logger.exception(f"获取历史订单信息时发生错误：{str(e)}")
             return None
 
     def get_positions(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
@@ -152,34 +177,55 @@ class MoomooAPI:
             logger.exception(f"获取持仓信息时发生错误：{str(e)}")
             return None
 
-def place_order(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, 
-                code: str, price: float, qty: float, trd_side: TrdSide) -> Optional[pd.DataFrame]:
-    try:
-        with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-            ret, data = trd_ctx.place_order(price=price, qty=qty, code=code, trd_side=trd_side, 
-                                            acc_id=acc_id, trd_env=trade_env)
-        if ret == RET_OK:
-            logger.info(f"Successfully placed order: {data.to_dict()}")
-            return data
-        else:
-            logger.error(f'下单失败：{data}')
+    def place_order(self, acc_id, trade_env, market, code, price, qty, trd_side):
+        try:
+            # 根据市场添加前缀
+            if market == TrdMarket.US:
+                code = f"US.{code}"
+            elif market == TrdMarket.HK:
+                code = f"HK.{code}"
+            
+            # 创建交易上下文
+            trd_ctx = OpenSecTradeContext(filter_trdmarket=market, 
+                              host=self.HOST, 
+                              port=self.PORT, 
+                              security_firm=self.SECURITY_FIRM)
+            
+            # 下单
+            ret, data = trd_ctx.place_order(
+                        price=price, 
+                        qty=qty, 
+                        code=code, 
+                        trd_side=trd_side,
+                        order_type=OrderType.NORMAL, 
+                        trd_env=trade_env,
+                        acc_id=acc_id
+                    )
+            if ret == RET_OK:
+                logger.info(f"下单成功：{data}")
+                return data
+            else:
+                logger.error(f"下单失败：{data}")
+                return None
+        except Exception as e:
+            logger.exception(f"下单时发生异常：{str(e)}")
             return None
-    except Exception as e:
-        logger.exception(f"下单时发生错误：{str(e)}")
-        return None
+        finally:
+            if 'trd_ctx' in locals():
+                trd_ctx.close()
 
-def unlock_trade(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, password: str) -> bool:
-    try:
-        with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-            ret, data = trd_ctx.unlock_trade(password, acc_id=acc_id, trd_env=trade_env)
-        if ret == RET_OK:
-            logger.info("Successfully unlocked trade")
-            return True
-        else:
-            logger.error(f'解锁交易失败：{data}')
+    def unlock_trade(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, password: str) -> bool:
+        try:
+            with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
+                ret, data = trd_ctx.unlock_trade(password, acc_id=acc_id, trd_env=trade_env)
+            if ret == RET_OK:
+                logger.info("Successfully unlocked trade")
+                return True
+            else:
+                logger.error(f'解锁交易失败：{data}')
+                return False
+        except Exception as e:
+            logger.exception(f"解锁交易时发生错误：{str(e)}")
             return False
-    except Exception as e:
-        logger.exception(f"解锁交易时发生错误：{str(e)}")
-        return False
 
 moomoo_api = MoomooAPI()    
