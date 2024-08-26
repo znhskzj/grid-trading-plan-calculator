@@ -4,6 +4,23 @@
 
 The Grid Trading Tool is a powerful application with a user-friendly graphical interface for creating, visualizing, and managing grid trading strategies. It enables users to input parameters such as total funds, initial price, stop-loss price, number of grids, and allocation method to generate a customized grid trading plan.
 
+## Disclaimer
+
+IMPORTANT: This software is provided for educational and informational purposes only. It is not intended to be used as financial advice or as a recommendation to make any specific investment decisions.
+
+The use of this tool involves significant financial risk. Grid trading and other investment strategies can result in substantial losses, especially in volatile market conditions. The author of this software is not responsible for any financial losses or damages incurred as a result of using this tool.
+
+By using this software, you acknowledge that:
+
+1. You are solely responsible for any investment decisions you make.
+2. You understand the risks involved in trading and investing.
+3. You will not hold the author liable for any losses or damages resulting from the use of this software.
+4. You are encouraged to seek advice from licensed financial professionals before making any investment decisions.
+
+The author makes no guarantees about the accuracy, reliability, or completeness of the information provided by this tool. Market conditions can change rapidly, and past performance does not guarantee future results.
+
+USE THIS SOFTWARE AT YOUR OWN RISK.
+
 ## Features
 
 - Multiple allocation methods: Equal amount, Proportional, and Linear weighted
