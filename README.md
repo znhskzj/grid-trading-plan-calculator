@@ -33,8 +33,11 @@ USE THIS SOFTWARE AT YOUR OWN RISK.
 - Trading instruction parsing for quick and flexible plan generation
 - Price tolerance checking and automatic adjustment of stop-loss prices
 - User-specific configuration file for personalized settings
-- Moomoo API integration for real-time trading capabilities and account information
+- Enhanced Moomoo API integration for real-time trading capabilities and account information
 - Support for US and HK stock markets in both real and simulated trading environments
+- Account querying features including available funds, stock positions, and historical orders
+- Ability to place orders based on calculated trading plans
+- Forced simulation mode toggle for safety in testing
 
 ## Project Structure
 
@@ -59,7 +62,7 @@ grid-trading-tool/
 ├── output/
 ├── scripts/
 │   ├── build_exe.py
-│   └── test_moomoo_api.py
+│   └── generate_project_structure.py
 ├── .github/
 │   └── workflows/
 │       └── python-app.yml
@@ -159,20 +162,28 @@ If you want to run the script from source or contribute to the project:
     - The application will periodically check for updates.
     - If an update is available, you will be prompted to download and install it.
 
-13. Querying Account Information
+13. Querying Account Information and Placing Orders
     - Ensure you have set up your Moomoo API connection in the settings.
     - Click on the "Query Available Funds" button to view your current account balance and available funds.
     - Use the "Query Stock Positions" button to see a detailed breakdown of your current stock holdings, including:
-      - Stock code
-      - Quantity
-      - Current market value
-      - Profit/Loss percentage
+       - Stock code
+       - Quantity
+       - Current market value
+       - Profit/Loss percentage
+    - Click on the "Query History Orders" button to view your recent trading history.
+    - Use the "Place Order by Plan" button to execute orders based on your calculated trading plan.
+
+14. Forced Simulation Mode
+    - Toggle the "Force Simulation Mode" button to ensure all operations are performed in a simulated environment, providing an extra layer of safety during testing and learning.
 
 ### Moomoo API Integration
 
 - The tool supports both real and simulated trading environments.
 - You can switch between US and HK markets in the Moomoo settings.
+- Enhanced features include querying account information, stock positions, and historical orders.
+- Ability to place orders directly based on calculated trading plans.
 - Always test your API connection before performing any operations.
+- Use the forced simulation mode for safe testing and learning.
 - Ensure your Moomoo account has the necessary permissions for the operations you wish to perform.
 
 ## Configuration

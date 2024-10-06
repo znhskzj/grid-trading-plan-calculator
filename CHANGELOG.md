@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.8] - 2024-08-22
+
+### Added
+- Implemented Moomoo API integration for querying account information, positions, and historical orders.
+- Added functionality to place orders based on calculated plans in both real and simulated trading environments.
+- Introduced a toggle for forced simulation mode.
+- Created a connection_test method for testing Moomoo API connectivity.
+
+### Changed
+- Refactored the App class, optimizing the creation and management of GUI components.
+- Updated the configuration management system, separating system and user configurations.
+- Revised the display and management of common stocks.
+- Modified API switching and initialization logic.
+
+### Improved
+- Enhanced error handling and logging to provide more detailed diagnostic information.
+- Optimized the saving and loading mechanisms for user settings.
+- Refined the display format and content of calculation results.
+- Enhanced the user interface and interaction for Moomoo settings.
+
+### Fixed
+- Resolved issues related to GUI component visibility.
+- Fixed problems with settings not being saved correctly in certain scenarios.
+- Corrected errors related to Moomoo API connection and queries.
+
+### Others
+- Updated project structure with the addition of new test file test_instruction_parsing.py.
+- Revised requirements.txt to include new dependencies.
+- Removed the deprecated user_config.ini file, replacing it with userconfig.ini.
+- Updated version number to 1.5.8 and release date.
+
 ## [1.5.7] - 2024-08-19
 
 ### Added
