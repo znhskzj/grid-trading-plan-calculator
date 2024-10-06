@@ -1,19 +1,14 @@
 # src/calculations.py
 
+from __future__ import annotations
 import logging
 import numpy as np
 import re
-from typing import Dict, List, Tuple
-import sys
-import os
-
-# 将项目根目录添加到 Python 路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from typing import Dict, List, Tuple, Union, Optional
 from src.utils import exception_handler
 from src.status_manager import StatusManager
 
 logger = logging.getLogger(__name__)
-
 
 @exception_handler
 def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int):
@@ -36,6 +31,20 @@ def validate_inputs(funds: float, initial_price: float, stop_loss_price: float, 
         raise ValueError("网格数量不能超过100")
 
 
+def equal_amount_allocation(num_prices: int) -> List[float]:
+    return [1.0] * num_prices
+
+def exponential_allocation(prices: List[float]) -> List[float]:
+    max_price = max(prices)
+    min_price = min(prices)
+    price_range = max_price - min_price
+    if price_range == 0:
+        return [1.0] * len(prices)
+    return [np.exp(3 * (max_price - price) / price_range) for price in prices]
+
+def linear_weighted_allocation(num_prices: int) -> List[float]:
+    return list(range(1, num_prices + 1))
+
 @exception_handler
 def calculate_weights(prices: List[float], method: int, max_shares: int) -> List[int]:
     logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}")
@@ -44,19 +53,14 @@ def calculate_weights(prices: List[float], method: int, max_shares: int) -> List
     if len(prices) == 1:
         return [max_shares]
 
-    if method == 0:  # 等金额分配
-        weights = [1] * len(prices)
-    elif method == 1:  # 等比例分配 - 指数增长策略
-        max_price = max(prices)
-        min_price = min(prices)
-        price_range = max_price - min_price
-        if price_range == 0:
-            weights = [1] * len(prices)
-        else:
-            weights = [np.exp(3 * (max_price - price) / price_range) for price in prices]
-    elif method == 2:  # 线性加权 - 低价格更高权重
-        weights = list(range(1, len(prices) + 1))
-    else:
+    allocation_methods = {
+        0: lambda: equal_amount_allocation(len(prices)),
+        1: lambda: exponential_allocation(prices),
+        2: lambda: linear_weighted_allocation(len(prices))
+    }
+
+    weights = allocation_methods.get(method, lambda: [])()
+    if not weights:
         raise ValueError("无效的分配方式")
 
     total_weight = sum(weights)
@@ -64,7 +68,6 @@ def calculate_weights(prices: List[float], method: int, max_shares: int) -> List
 
     logger.debug(f"计算得到的初始股数: {initial_shares}")
     return initial_shares
-
 
 @exception_handler
 def calculate_buy_plan(funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method:
@@ -207,7 +210,7 @@ def format_results(
     return result
 
 
-def parse_trading_instruction(instruction: str, current_api_price: float = None) -> Dict[str, any]:
+def parse_trading_instruction(instruction: str, current_api_price: Optional[float] = None) -> Dict[str, Union[str, float, Tuple[float, float], None]]:
     logger.info(f"开始解析交易指令: {instruction}")
     instruction = instruction.upper()
     
@@ -253,7 +256,7 @@ def parse_trading_instruction(instruction: str, current_api_price: float = None)
     if not symbol or current_price is None:
         raise ValueError("无效的指令格式：缺少股票代码或价格信息")
     
-    result = {
+    result: Dict[str, Union[str, float, Tuple[float, float], None]] = {
         "symbol": symbol,
         "current_price": current_price,
         "stop_loss": stop_loss,
@@ -267,6 +270,7 @@ def parse_trading_instruction(instruction: str, current_api_price: float = None)
         price_diff = abs(current_api_price - current_price) / current_price
         if price_diff > price_tolerance:
             result['price_warning'] = f"指令价格与当前实际价格相差超过{price_tolerance*100}%"
+    logger.info("解析完成")
     return result
 
 def calculate_grid_from_instruction(parsed_instruction: Dict[str, any], total_funds: float, num_grids: int, allocation_method: int) -> str:
@@ -289,25 +293,6 @@ def calculate_grid_from_instruction(parsed_instruction: Dict[str, any], total_fu
     
     return result
 
-def test_parse_trading_instruction():
-    test_cases = [
-        "日内SOXL 现价到30之间分批入，压力31.5，止损29.5",
-        "AAPL 现价150区间买入，止损145",
-        "TSLA 230-240之间建仓，止损220",
-        "GOOGL 2800附近买入，压力2900",
-        "OXY 日内区间56.4-57，我待会通知大家如何做财报"
-    ]
-    
-    for instruction in test_cases:
-        print(f"\n测试指令: {instruction}")
-        result = parse_trading_instruction(instruction)
-        print(f"解析结果: {result}")
-        
-        if result['symbol'] and result['current_price'] and result['stop_loss']:
-            print("解析成功！")
-        else:
-            print("解析失败。缺少必要信息。")
-
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    test_parse_trading_instruction()
+    import pytest
+    pytest.main(["-v", "../tests/test_instruction_parsing.py"])

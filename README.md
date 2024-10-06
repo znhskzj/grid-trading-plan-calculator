@@ -1,106 +1,84 @@
-# Grid Trading Plan Calculator
-
-Version: 1.5.4
-Author: Rong Zhu
-Date: August 14, 2024
+# Grid Trading Tool
 
 ## Description
 
-The Grid Trading Plan Calculator is a powerful tool with a user-friendly graphical interface for creating, visualizing, and managing grid trading strategies. It enables users to input parameters such as total funds, initial price, stop-loss price, number of grids, and allocation method to generate a customized grid trading plan.
+The Grid Trading Tool is a powerful application with a user-friendly graphical interface for creating, visualizing, and managing grid trading strategies. It enables users to input parameters such as total funds, initial price, stop-loss price, number of grids, and allocation method to generate a customized grid trading plan.
+
+## Disclaimer
+
+IMPORTANT: This software is provided for educational and informational purposes only. It is not intended to be used as financial advice or as a recommendation to make any specific investment decisions.
+
+The use of this tool involves significant financial risk. Grid trading and other investment strategies can result in substantial losses, especially in volatile market conditions. The author of this software is not responsible for any financial losses or damages incurred as a result of using this tool.
+
+By using this software, you acknowledge that:
+
+1. You are solely responsible for any investment decisions you make.
+2. You understand the risks involved in trading and investing.
+3. You will not hold the author liable for any losses or damages resulting from the use of this software.
+4. You are encouraged to seek advice from licensed financial professionals before making any investment decisions.
+
+The author makes no guarantees about the accuracy, reliability, or completeness of the information provided by this tool. Market conditions can change rapidly, and past performance does not guarantee future results.
+
+USE THIS SOFTWARE AT YOUR OWN RISK.
 
 ## Features
 
 - Multiple allocation methods: Equal amount, Proportional, and Linear weighted
 - Real-time stock price fetching for common stocks
-- Dynamic common stock buttons in the left panel
-- Live status bar for immediate feedback and error messages
-- Configuration saving and loading
-- CSV export of trading plans
-- Comprehensive logging for debugging and auditing
+- Dynamic common stock buttons and live status bar for immediate feedback
+- Configuration saving/loading and CSV export of trading plans
 - User-friendly GUI with intuitive layout
 - Automatic update checking and installation
-- Users can now switch between Yahoo Finance and Alpha Vantage for stock data retrieval
+- Support for both Yahoo Finance and Alpha Vantage APIs for stock data retrieval
 - Trading instruction parsing for quick and flexible plan generation
-- Automatic adjustment of stop-loss prices to ensure they are below current prices
-- Price tolerance checking to warn users of significant price discrepancies
+- Price tolerance checking and automatic adjustment of stop-loss prices
 - User-specific configuration file for personalized settings
-- Automatic saving and loading of user preferences
+- Moomoo API integration for real-time trading capabilities and account information
+- Support for US and HK stock markets in both real and simulated trading environments
 
 ## Project Structure
 
-### Directory and File Structure
 ```plaintext
-grid-trading-plan-calculator/
+grid-trading-tool/
 ├── src/
 │   ├── __init__.py
+│   ├── api_interface.py
+│   ├── api_manager.py
 │   ├── calculations.py
 │   ├── config.py
 │   ├── gui.py
-│   ├── utils.py
-│   └── status_manager.py
+│   ├── status_manager.py
+│   └── utils.py
 ├── tests/
-│   ├── __pycache__/
-│   └── test_calculations.py
+│   ├── test_calculations.py
+│   └── test_instruction_parsing.py
 ├── assets/
 │   └── icons/
 │       └── app_icon.ico
-├── build/
-├── dist/
 ├── logs/
 ├── output/
 ├── scripts/
 │   ├── build_exe.py
-│   └── update_readme.py
+│   └── test_moomoo_api.py
 ├── .github/
 │   └── workflows/
 │       └── python-app.yml
 ├── grid_trading_app.py
 ├── config.ini
 ├── CHANGELOG.md
-├── Grid Trading Plan Calculator.spec
-├── Grid Trading Tool.spec
 ├── LICENSE
-├── project_requirements.md
-├── pytest.ini
 ├── README.md
 ├── README-zh-CN.md
+├── userconfig.ini.template
 ├── requirements.txt
 └── version.py
 ```
-
-### Main File Descriptions:
-- `grid_trading_app.py`: Main entry point of the application.
-- `src/`: Directory containing core application modules.
-- `tests/`: Directory containing unit tests.
-- `assets/`: Directory for static assets like icons.
-- `logs/`: Directory for log files.
-- `scripts/`: Directory for utility scripts like the build script.
-- `config.ini`: Configuration file storing user's default settings.
-- `CHANGELOG.md`: Detailed version history and updates.
-- `version.py`: Central file for version management and update checking.
-- `requirements.txt`: List of Python package dependencies.
-- `LICENSE`: License file.
-- `README.md`: Main project documentation.
-- `README-zh-CN.md`: Chinese version of the documentation.
-
-## Build Instructions
-
-To build a standalone executable, follow these steps:
-
-1. Ensure you have Python 3.7 or higher installed on your system.
-2. Open a command prompt and navigate to the project root directory.
-3. Run the following command:
-```
-python scripts/build_exe.py
-```
-4. Once the build is complete, the executable will be located in the `dist` directory.
-
 
 ## Installation
 
 ### For Windows Users
 
-1. Go to the [Releases](https://github.com/znhskzj/grid-trading-plan-calculator/releases) page.
+1. Go to the [Releases](https://github.com/znhskzj/grid-trading-tool/releases) page.
 2. Download the latest `.exe` file.
 3. Double-click the downloaded file to run the application.
 
@@ -110,18 +88,28 @@ If you want to run the script from source or contribute to the project:
 
 1. Ensure you have Python 3.7 or higher installed.
 2. Clone the repository:
-git clone https://github.com/znhskzj/grid-trading-plan-calculator.git
+   ```
+   git clone https://github.com/znhskzj/grid-trading-tool.git
+   ```
 3. Navigate to the project directory:
-cd grid-trading-plan-calculator
+   ```
+   cd grid-trading-tool
+   ```
 4. Create a virtual environment:
-python -m venv venv
+   ```
+   python -m venv venv
+   ```
 5. Activate the virtual environment:
-- On Windows: `venv\Scripts\activate`
-- On macOS and Linux: `source venv/bin/activate`
+   - On Windows: `venv\Scripts\activate`
+   - On macOS and Linux: `source venv/bin/activate`
 6. Install required packages:
-pip install -r requirements.txt
+   ```
+   pip install -r requirements.txt
+   ```
 7. Run the script:
-python grid_trading_plan.py
+   ```
+   python grid_trading_app.py
+   ```
 
 ## Usage
 
@@ -129,7 +117,7 @@ python grid_trading_plan.py
 
 2. In the main window:
    - The left panel displays common stock buttons.
-   - The right panel contains input fields and control buttons.
+   - The right panel contains input fields, control buttons, and settings.
 
 3. Click "Common Stocks" to view and select predefined stocks:
    - Clicking on a stock symbol (e.g., AAPL, GOOGL) will automatically fetch its current price.
@@ -145,64 +133,55 @@ python grid_trading_plan.py
    - Proportional: Allocates more funds to grids closer to the current price.
    - Linear Weighted: Gradually increases allocation as price moves away from the initial price.
 
-6. Click "Calculate Purchase Plan" to generate the grid trading plan.
+6. Select API source:
+   - Choose between Yahoo Finance and Alpha Vantage for stock data retrieval.
 
-7. View results in the text area below:
-   - The plan will show each grid's price level and the amount to invest at that level.
+7. Configure Moomoo settings:
+   - Select between real and simulated trading environments.
+   - Choose between US and HK stock markets.
+   - Click "Test Connection" to verify Moomoo API connectivity.
 
-8. Additional options:
-   - "Calculate with 10% Reserve" or "Calculate with 20% Reserve": Generates a plan while keeping a portion of funds in reserve.
-   - "Save as CSV": Exports the current plan to a CSV file for further analysis or record-keeping.
-   - "Reset to Default Values": Resets all input fields to their default values from the configuration.
+8. Click "Calculate Purchase Plan" to generate the grid trading plan.
 
-9. Automatic Updates:
-   - The application will periodically check for updates.
-   - If an update is available, you will be prompted to download and install it.
+9. View results in the text area below:
+   - The plan will show total funds, reserved funds (if any), available funds, and the allocation for each grid.
 
-10. Trading Instruction Parsing:
-   - Enter a trading instruction in the designated field to generate a plan based on the instruction.
-   - The application will parse the instruction and generate a plan accordingly.
+10. Additional options:
+    - "Calculate with 10% Reserve" or "Calculate with 20% Reserve": Generates a plan while keeping a portion of funds in reserve.
+    - "Save as CSV": Exports the current plan to a CSV file for further analysis or record-keeping.
+    - "Reset to Default Values": Resets input fields while preserving common stocks and Moomoo settings.
 
-### Example Usage
+11. Trading Instruction Parsing:
+    - Enter a trading instruction in the designated field to generate a plan based on the instruction.
+    - The application will parse the instruction and generate a plan accordingly.
 
-Let's say you want to create a grid trading plan for Apple (AAPL) stock:
+12. Automatic Updates:
+    - The application will periodically check for updates.
+    - If an update is available, you will be prompted to download and install it.
 
-1. Launch the application.
-2. Click "Common Stocks" and then click "AAPL".
-3. The current price of AAPL will be fetched automatically (let's say it's $150).
-4. Input the following:
-   - Available Funds: 10000 (assuming you want to invest $10,000)
-   - Initial Price: 150 (auto-filled from the fetched price)
-   - Stop Loss Price: 140 (you decide to cut losses if the price drops to $140)
-   - Number of Grids: 5 (you want 5 price levels in your grid)
-5. Select "Proportional" as the allocation method.
-6. Click "Calculate Purchase Plan".
-7. The result will show you 5 price levels between $140 and $150, with more funds allocated to grids closer to $150.
-8. If you're satisfied with the plan, click "Save as CSV" to export it.
-9. API Selection: In the main window, you can now choose between Yahoo Finance and Alpha Vantage APIs for stock data retrieval.
-10. Saving Preferences: Your API choice and frequently used stocks are now automatically saved for future sessions.
+13. Querying Account Information
+    - Ensure you have set up your Moomoo API connection in the settings.
+    - Click on the "Query Available Funds" button to view your current account balance and available funds.
+    - Use the "Query Stock Positions" button to see a detailed breakdown of your current stock holdings, including:
+      - Stock code
+      - Quantity
+      - Current market value
+      - Profit/Loss percentage
 
-### Example Usage with Trading Instruction
+### Moomoo API Integration
 
-Let's say you want to create a grid trading plan for SOXL stock based on a trading instruction:
-
-1. Launch the application.
-2. In the "Trading Instruction" field, enter: "日内SOXL 现价到30之间分批入，压力31.5，止损29.5"
-3. Click "Calculate Purchase Plan".
-4. The application will parse the instruction, fetch the current price if available, and generate a plan based on the instruction.
-5. The result will show you the parsed information, including the stock symbol, price range, and stop-loss price.
-6. If there are any discrepancies between the instruction and current market prices, you'll see a warning.
-7. The grid trading plan will be generated based on this information.
-8. If you're satisfied with the plan, click "Save as CSV" to export it.
+- The tool supports both real and simulated trading environments.
+- You can switch between US and HK markets in the Moomoo settings.
+- Always test your API connection before performing any operations.
+- Ensure your Moomoo account has the necessary permissions for the operations you wish to perform.
 
 ## Configuration
 
 The `config.ini` file in the project root contains default settings and common stocks. You can modify this file to customize the application's default behavior and add or remove common stocks.
-The `config.ini` file now includes API settings. You can choose between Yahoo Finance and Alpha Vantage for stock price fetching. If you choose Alpha Vantage, you need to provide an API key.
+
+The `config.ini` file includes API settings. You can choose between Yahoo Finance and Alpha Vantage for stock price fetching. If you choose Alpha Vantage, you need to provide an API key.
 
 ### Example Configuration
-
-Here's an example of what your `config.ini` might look like:
 
 ```ini
 [General]
@@ -223,11 +202,6 @@ stock5 = TSLA
 choice = yahoo
 alpha_vantage_key = your_alpha_vantage_key_here
 ```
-## Upcoming Features
-
-- User-specific configuration file for personalized settings
-- Customizable automatic update checks based on user preferences
-- Integration with Moomoo trading platform for real-time trading capabilities
 
 ## License
 

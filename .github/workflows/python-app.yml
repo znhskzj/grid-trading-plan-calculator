@@ -35,9 +35,6 @@ jobs:
         echo "trade_env = REAL" >> userconfig.ini
         echo "security_firm = FUTUINC" >> userconfig.ini
 
-    - name: Run tests
-      run: pytest
-
     - name: Set VERSION env variable
       run: echo "VERSION=$(python -c "from version import VERSION; print(VERSION)")" >> $env:GITHUB_ENV
       shell: pwsh
@@ -68,17 +65,6 @@ jobs:
         }
       shell: pwsh
   
-    - name: Update README files
-      run: python scripts/update_readme.py
-    
-    - name: Commit README changes
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add README.md README.zh-CN.md
-        git commit -m "Update version in README files" || echo "No changes to commit"
-        git push
-
     - name: Create Tag and Release
       id: create_release
       if: ${{ env.should_release == 'true' }}

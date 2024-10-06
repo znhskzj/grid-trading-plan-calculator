@@ -2,6 +2,77 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.7] - 2024-08-19
+
+### Added
+- Implemented trading instruction parsing for quick and flexible plan generation.
+- Added support for processing trading instructions in all calculation methods (normal, 10% reserve, and 20% reserve).
+- Enhanced the display of calculation results to include parsed trading instruction information.
+
+### Changed
+- Modified the `set_stock_price` method to update the current symbol when selecting a stock.
+- Updated the `run_calculation`, `_run_normal_calculation`, and `calculate_with_reserve` methods to handle trading instructions.
+
+### Improved
+- Optimized the display format of calculation results for consistency across all calculation methods.
+- Enhanced the handling of default trading instruction text to prevent unintended processing.
+
+### Fixed
+- Resolved issues with losing selected stock information when switching between calculation methods.
+- Fixed a syntax error related to f-string expressions containing backslashes.
+
+### Others
+- Refined error handling and logging for trading instruction parsing and processing.
+- Updated the GUI to provide clearer feedback on trading instruction processing.
+
+## [1.5.6] - 2024-08-18
+
+### Added
+- Implemented functionality to query available funds and stock positions using Moomoo API.
+- Added detailed display of stock positions, including quantity, market value, and profit/loss percentage.
+
+### Changed
+- Refined the display format for stock positions to improve readability and information clarity.
+- Updated the `query_positions` method to provide a more comprehensive overview of the portfolio.
+
+### Improved
+- Enhanced the layout of stock position information, including right-aligned numerical data and appropriate decimal precision.
+- Optimized the display of large numbers with thousand separators for better readability.
+
+### Fixed
+- Resolved issues with displaying incomplete stock position information.
+- Fixed formatting inconsistencies in the results display area.
+
+### Others
+- Updated error handling and logging for Moomoo API-related functions.
+- Refined user feedback messages for API queries and connection status.
+
+## [1.5.5] - 2024-08-17
+
+### Added
+- Integrated Moomoo API settings and connection test functionality in the GUI.
+- Implemented new fund allocation display, showing total funds, reserved funds, and available funds.
+- Added support for different trading environments (real and simulated) and markets (US and HK) in Moomoo settings.
+
+### Changed
+- Refactored calculation logic to accommodate reserved funds functionality.
+- Updated GUI layout to include Moomoo settings alongside allocation method and API choice.
+- Modified the reset to default function to preserve common stocks and Moomoo settings.
+
+### Improved
+- Enhanced error handling in API connection tests and configuration management.
+- Optimized the display of calculation results with more detailed fund breakdowns.
+- Improved user feedback for Moomoo API connection status, including specific environment and market information.
+
+### Fixed
+- Resolved encoding issues when saving and loading user configuration files.
+- Fixed bugs related to resetting default values and handling of user preferences.
+
+### Others
+- Updated error logging to provide more detailed information for troubleshooting.
+- Refined the structure of the user configuration file to include Moomoo settings.
+- Updated documentation to reflect new Moomoo API integration and usage instructions.
+
 ## [1.5.4] - 2024-08-14
 
 ### Added

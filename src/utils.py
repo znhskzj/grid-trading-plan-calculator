@@ -8,13 +8,13 @@ import subprocess
 from functools import wraps
 from packaging import version
 from tqdm import tqdm
+from typing import Callable, Any, Optional
 
-# 创建一个模块级的 logger
 logger = logging.getLogger(__name__)
 
-def exception_handler(func):
+def exception_handler(func: Callable) -> Callable:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except Exception as e:
@@ -22,30 +22,20 @@ def exception_handler(func):
             raise
     return wrapper
 
-def get_current_version():
-    """
-    从 version.py 文件中获取当前版本
-    """
+def get_current_version() -> Optional[str]:
     try:
         with open('version.py', 'r') as f:
             exec(f.read())
-        return locals()['VERSION']
+        return locals().get('VERSION')
     except Exception as e:
         logger.error(f"Error reading version.py: {str(e)}")
         return None
 
-def compare_versions(current_version, latest_version):
-    """
-    比较当前版本和最新版本
-    返回 True 如果有新版本可用，否则返回 False
-    """
+def compare_versions(current_version: str, latest_version: str) -> bool:
     return version.parse(latest_version) > version.parse(current_version)
 
 @exception_handler
-def get_latest_version():
-    """
-    从 GitHub 获取最新版本信息
-    """
+def get_latest_version() -> Optional[str]:
     url = "https://api.github.com/repos/znhskzj/grid-trading-plan-calculator/releases/latest"
     try:
         response = requests.get(url)
@@ -57,7 +47,7 @@ def get_latest_version():
         return None
 
 @exception_handler
-def download_update(version):
+def download_update(version: str) -> str:
     url = f"https://github.com/znhskzj/grid-trading-plan-calculator/releases/download/v{version}/grid_trading_app.exe"
     local_filename = f"grid_trading_app-{version}.exe"
     
@@ -79,17 +69,22 @@ def download_update(version):
     return local_filename
 
 @exception_handler
-def install_update(filename):
+def install_update(filename: str) -> None:
     if sys.platform.startswith('win'):
         subprocess.Popen([filename], shell=True)
         sys.exit()
     else:
         logger.error("自动更新只支持 Windows 系统")
 
-def check_for_updates():
+def check_for_updates() -> Optional[str]:
     current_version = get_current_version()
+    if current_version is None:
+        return None
     latest_version = get_latest_version()
     
     if latest_version and compare_versions(current_version, latest_version):
         return latest_version
     return None
+
+def get_project_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

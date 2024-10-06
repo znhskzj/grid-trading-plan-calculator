@@ -1,5 +1,31 @@
+; 请将本文件重新命名为userconfig.ini
+
+[API]
+choice = yahoo
+alpha_vantage_key = 
+
+[General]
+allocation_method = 1
+
+[CommonStocks]
+stock1 = AAPL
+stock2 = SOXL
+stock3 = UPST
+stock4 = OXY
+stock5 = DE
+
+[MoomooSettings]
+trade_mode = 模拟
+market = 港股
+
 [MoomooAPI]
 host = 127.0.0.1
 port = 11111
 trade_env = REAL
 security_firm = FUTUINC
+
+[RecentCalculations]
+funds = 50000.0
+initial_price = 50.0
+stop_loss_price = 30.0
+num_grids = 10
