@@ -113,104 +113,37 @@ class MoomooAdapter(TradingInterface):
                 logger.exception(f"选择账户时发生错误：{str(e)}")
                 return None
 
-    def get_account_info(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, currency: Currency = Currency.USD) -> Optional[pd.DataFrame]:
-        try:
-            with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                ret, data = trd_ctx.accinfo_query(acc_id=acc_id, trd_env=trade_env, currency=currency)
-            if ret == RET_OK:
-                return data
-            else:
-                logger.error(f'获取账户 {acc_id} 信息失败：{data}')
-                return None
-        except Exception as e:
-            logger.exception(f"获取账户信息时发生错误：{str(e)}")
-            return None
+    def get_account_info(self, **kwargs) -> Dict[str, Any]:
+        acc_id = kwargs.get('acc_id')
+        trade_env = kwargs.get('trade_env')
+        market = kwargs.get('market')
+        currency = kwargs.get('currency', Currency.USD)
+        return self.get_account_info(acc_id, trade_env, market, currency)
 
-    def get_history_orders(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, include_cancelled: bool = False, days: int = 30) -> Optional[pd.DataFrame]:
-        try:
-            with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=days)
-                
-                status_filter_list = [] if include_cancelled else [
-                                    OrderStatus.SUBMITTED,
-                                    OrderStatus.FILLED_PART,
-                                    OrderStatus.FILLED_ALL,
-                                    OrderStatus.CANCELLED_PART,
-                                    OrderStatus.CANCELLED_ALL
-                                ]
-                
-                logger.debug(f"Querying history orders with parameters: acc_id={acc_id}, trade_env={trade_env}, market={market}, start={start_date.strftime('%Y-%m-%d')}, end={end_date.strftime('%Y-%m-%d')}, status_filter_list={status_filter_list}")
-                
-                ret, data = trd_ctx.history_order_list_query(
-                    status_filter_list=status_filter_list,
-                    start=start_date.strftime("%Y-%m-%d"),
-                    end=end_date.strftime("%Y-%m-%d"),
-                    trd_env=trade_env,
-                    acc_id=acc_id
-                )
-                
-                if ret == RET_OK:
-                    logger.info(f"Successfully retrieved {len(data)} historical orders from {start_date.date()} to {end_date.date()}")
-                    logger.debug(f"Data columns: {data.columns}")
-                    return data
-                else:
-                    logger.error(f'查询账户 {acc_id} 历史订单失败：{data}')
-                    return None
-        except Exception as e:
-            logger.exception(f"获取历史订单信息时发生错误：{str(e)}")
-            return None
+    def get_positions(self, **kwargs) -> Dict[str, Any]:
+        acc_id = kwargs.get('acc_id')
+        trade_env = kwargs.get('trade_env')
+        market = kwargs.get('market')
+        return self.get_positions(acc_id, trade_env, market)
 
-    def get_positions(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
-        try:
-            with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                ret, data = trd_ctx.position_list_query(acc_id=acc_id, trd_env=trade_env)
-            if ret == RET_OK:
-                logger.info(f"Successfully retrieved {len(data)} positions")
-                return data
-            else:
-                logger.error(f'查询账户 {acc_id} 持仓失败：{data}')
-                return None
-        except Exception as e:
-            logger.exception(f"获取持仓信息时发生错误：{str(e)}")
-            return None
-
-    def place_order(self, acc_id, trade_env, market, code, price, qty, trd_side):
-        try:
-            # 根据市场添加前缀
-            if market == TrdMarket.US:
-                code = f"US.{code}"
-            elif market == TrdMarket.HK:
-                code = f"HK.{code}"
-            
-            # 创建交易上下文
-            trd_ctx = OpenSecTradeContext(filter_trdmarket=market, 
-                              host=self.HOST, 
-                              port=self.PORT, 
-                              security_firm=self.SECURITY_FIRM)
-            
-            # 下单
-            ret, data = trd_ctx.place_order(
-                        price=price, 
-                        qty=qty, 
-                        code=code, 
-                        trd_side=trd_side,
-                        order_type=OrderType.NORMAL, 
-                        trd_env=trade_env,
-                        acc_id=acc_id
-                    )
-            if ret == RET_OK:
-                logger.info(f"下单成功：{data}")
-                return data
-            else:
-                logger.error(f"下单失败：{data}")
-                return None
-        except Exception as e:
-            logger.exception(f"下单时发生异常：{str(e)}")
-            return None
-        finally:
-            if 'trd_ctx' in locals():
-                trd_ctx.close()
+    def get_history_orders(self, **kwargs) -> Dict[str, Any]:
+        acc_id = kwargs.get('acc_id')
+        trade_env = kwargs.get('trade_env')
+        market = kwargs.get('market')
+        include_cancelled = kwargs.get('include_cancelled', False)
+        days = kwargs.get('days', 30)
+        return self.get_history_orders(acc_id, trade_env, market, include_cancelled, days)
+    
+    def place_order(self, **kwargs) -> Any:
+        # 从 kwargs 中提取所需参数
+        acc_id = kwargs.get('acc_id')
+        trade_env = kwargs.get('trade_env')
+        market = kwargs.get('market')
+        code = kwargs.get('code')
+        price = kwargs.get('price')
+        qty = kwargs.get('qty')
+        trd_side = kwargs.get('trd_side')
+        return self.place_order(acc_id, trade_env, market, code, price, qty, trd_side)
 
     def unlock_trade(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, password: str) -> bool:
         try:

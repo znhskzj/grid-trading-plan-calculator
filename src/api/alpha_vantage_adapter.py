@@ -20,7 +20,6 @@ class AlphaVantageAdapter(PriceQueryInterface):
             if data and '05. price' in data:
                 return float(data['05. price']), 'Alpha Vantage'
             else:
-                logger.error(f"Alpha Vantage 未返回 {symbol} 的有效价格数据")
                 raise APIError(f"Alpha Vantage 未返回 {symbol} 的有效价格数据")
         except Exception as e:
             error_msg = str(e)

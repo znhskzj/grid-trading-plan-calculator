@@ -2,9 +2,14 @@ import numpy as np
 import re
 from typing import List, Tuple, Dict, Union, Any, Optional
 import logging
+from config.config_manager import ConfigManager
+
+logger = logging.getLogger(__name__)
 
 class TradingLogic:
     def __init__(self):
+        self.config_manager = ConfigManager()
+        self.trading_config = self.config_manager.get_trading_config()
         self.logger = logging.getLogger(__name__)
 
     def validate_inputs(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> str:
@@ -31,6 +36,13 @@ class TradingLogic:
         """计算购买计划"""
         self.logger.info("开始执行 calculate_buy_plan 函数")
         
+        # 使用 trading_config 中的默认值
+        funds = funds or float(self.trading_config.get('default_funds', 50000.0))
+        initial_price = initial_price or float(self.trading_config.get('default_initial_price', 50.0))
+        stop_loss_price = stop_loss_price or float(self.trading_config.get('default_stop_loss_price', 30.0))
+        num_grids = num_grids or int(self.trading_config.get('default_num_grids', 10))
+        allocation_method = allocation_method or int(self.trading_config.get('default_allocation_method', 1))
+
         error_message = self.validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)
         if error_message:
             return [], error_message
@@ -79,6 +91,15 @@ class TradingLogic:
 
         self.logger.info("calculate_buy_plan 函数执行完毕")
         return buy_plan, warning_message
+    
+    def save_recent_calculation(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int):
+        recent_calc = {
+            'funds': str(funds),
+            'initial_price': str(initial_price),
+            'stop_loss_price': str(stop_loss_price),
+            'num_grids': str(num_grids)
+        }
+        self.config_manager.set_config('RecentCalculations', recent_calc)
 
     def calculate_weights(self, prices: List[float], method: int, max_shares: int) -> List[int]:
         """计算不同分配方式的权重"""
