@@ -1,12 +1,16 @@
+# src/gui/main_window.py
+
 import tkinter as tk
 from tkinter import ttk
-import logging
+from src.utils.logger import setup_logger
 from .components.left_frame import LeftFrame
 from .components.right_frame import RightFrame
 from .components.result_frame import ResultFrame
 from .components.status_bar import StatusBar
 from .controllers.main_controller import MainController
 from src.config.config_manager import ConfigManager
+
+logger = setup_logger('main_window', 'logs/main_window.log')
 
 class MainWindow:
     def __init__(self, master, version):
@@ -70,31 +74,31 @@ class MainWindow:
     
     def check_widget_visibility(self):
         if not hasattr(self.result_frame, 'result_text'):
-            logging.error("result_text widget not found in ResultFrame")
+            logger.error("result_text widget not found in ResultFrame")
             return
         
-        logging.debug(f"Main window geometry: {self.master.winfo_geometry()}")
-        logging.debug(f"Main frame geometry: {self.main_frame.winfo_geometry()}")
-        logging.debug(f"Result frame geometry: {self.result_frame.winfo_geometry()}")
-        logging.debug(f"Result text geometry: {self.result_frame.result_text.winfo_geometry()}")
+        logger.debug(f"Main window geometry: {self.master.winfo_geometry()}")
+        logger.debug(f"Main frame geometry: {self.main_frame.winfo_geometry()}")
+        logger.debug(f"Result frame geometry: {self.result_frame.winfo_geometry()}")
+        logger.debug(f"Result text geometry: {self.result_frame.result_text.winfo_geometry()}")
         
         if not self.result_frame.result_text.winfo_viewable():
-            logging.warning("Result text widget is not visible")
+            logger.warning("Result text widget is not visible")
         else:
-            logging.debug("Result text widget is visible")
+            logger.debug("Result text widget is visible")
         
         if not self.result_frame.winfo_viewable():
-            logging.warning("Result frame is not visible")
+            logger.warning("Result frame is not visible")
         else:
-            logging.debug("Result frame is visible")
+            logger.debug("Result frame is visible")
         
         # 检查是否有其他组件覆盖了结果文本框
         overlapping_widgets = [w for w in self.main_frame.winfo_children() if w.winfo_viewable() and w != self.result_frame]
         if overlapping_widgets:
-            logging.warning(f"Potentially overlapping widgets: {overlapping_widgets}")
+            logger.warning(f"Potentially overlapping widgets: {overlapping_widgets}")
             for widget in overlapping_widgets:
-                logging.debug(f"Overlapping widget info: {widget.winfo_class()}, {widget.winfo_geometry()}")
+                logger.debug(f"Overlapping widget info: {widget.winfo_class()}, {widget.winfo_geometry()}")
         
         # 检查结果框架的布局信息
         layout_info = self.result_frame.grid_info()
-        logging.debug(f"Result frame layout info: {layout_info}")
+        logger.debug(f"Result frame layout info: {layout_info}")

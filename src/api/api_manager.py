@@ -1,68 +1,67 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.config_manager import ConfigManager
+# src/api/api_manager.py
+
 from typing import Dict, Any, Tuple
-from .price_query_interface import PriceQueryInterface
-from .trading_interface import TradingInterface
-from .yahoo_finance_adapter import YahooFinanceAdapter
+from src.utils.logger import setup_logger
+from src.utils.error_handler import APIError, PriceQueryError, TradingError
 from .alpha_vantage_adapter import AlphaVantageAdapter
+from .yahoo_finance_adapter import YahooFinanceAdapter
 from .moomoo_adapter import MoomooAdapter
+from src.config.config_manager import ConfigManager
+
+logger = setup_logger('api_manager', 'logs/api_manager.log')
 
 class APIManager:
     def __init__(self):
         self.config_manager = ConfigManager()
         self.api_config = self.config_manager.get_api_config()
-        self.current_api = self.api_config.get('choice', 'yahoo')
+        self.current_price_api = self.api_config.get('choice', 'yahoo')
         
-        self.price_query_apis: Dict[str, PriceQueryInterface] = {}
-        self.trading_apis: Dict[str, TradingInterface] = {}
-
-        # 初始化各种 API 适配器
-        self.add_price_query_api('yahoo', YahooFinanceAdapter())
-        self.add_price_query_api('alpha_vantage', AlphaVantageAdapter(self.api_config.get('alpha_vantage_key', '')))
+        self.price_query_apis = {
+            'yahoo': YahooFinanceAdapter(),
+            'alpha_vantage': AlphaVantageAdapter(self.api_config.get('alpha_vantage_key', ''))
+        }
         
-        moomoo_config = self.config_manager.get_config('MoomooAPI', {})
-        moomoo_adapter = MoomooAdapter(moomoo_config)
-        self.add_price_query_api('moomoo', moomoo_adapter)
-        self.add_trading_api('moomoo', moomoo_adapter)
-
-    def add_price_query_api(self, name: str, api: PriceQueryInterface):
-        self.price_query_apis[name] = api
-
-    def add_trading_api(self, name: str, api: TradingInterface):
-        self.trading_apis[name] = api
-
-    def get_price_query_api(self, name: str) -> PriceQueryInterface:
-        if name not in self.price_query_apis:
-            raise ValueError(f"Price query API '{name}' not found")
-        return self.price_query_apis[name]
-
-    def get_trading_api(self, name: str) -> TradingInterface:
-        if name not in self.trading_apis:
-            raise ValueError(f"Trading API '{name}' not found")
-        return self.trading_apis[name]
+        self.trading_api = MoomooAdapter(self.config_manager.get_config('MoomooAPI', {}))
 
     def get_stock_price(self, symbol: str) -> Tuple[float, str]:
-        if self.current_api not in self.price_query_apis:
-            raise ValueError(f"Current API '{self.current_api}' is not a valid price query API")
-        return self.get_price_query_api(self.current_api).get_stock_price(symbol)
+        try:
+            return self.price_query_apis[self.current_price_api].get_stock_price(symbol)
+        except PriceQueryError as e:
+            logger.error(f"使用 {self.current_price_api} 获取价格失败: {str(e)}")
+            raise
 
-    def place_order(self, api_name: str, **kwargs) -> Any:
-        return self.get_trading_api(api_name).place_order(**kwargs)
-
-    def switch_api(self, api_name: str):
+    def switch_price_api(self, api_name: str):
         if api_name not in self.price_query_apis:
-            raise ValueError(f"Unsupported API: {api_name}")
-        self.current_api = api_name
+            raise ValueError(f"不支持的 API: {api_name}")
+        self.current_price_api = api_name
         self.config_manager.set_api_config({'choice': api_name})
+        logger.info(f"切换到价格查询 API: {api_name}")
 
-    # 可以添加其他方法来封装不同的 API 操作
-    def get_account_info(self, api_name: str, **kwargs) -> Dict[str, Any]:
-        return self.get_trading_api(api_name).get_account_info(**kwargs)
+    def test_moomoo_connection(self, trade_env, market, timeout=10.0):
+        return self.trading_api.test_moomoo_connection(trade_env, market, timeout)
 
-    def get_positions(self, api_name: str, **kwargs) -> Dict[str, Any]:
-        return self.get_trading_api(api_name).get_positions(**kwargs)
+    def stop_all_connections(self):
+        self.trading_api.stop_all_connections()
 
-    def get_history_orders(self, api_name: str, **kwargs) -> Dict[str, Any]:
-        return self.get_trading_api(api_name).get_history_orders(**kwargs)
+    def get_acc_list(self, trade_env, market):
+        return self.trading_api.get_acc_list(trade_env, market)
+
+    def get_account_info(self, **kwargs):
+        return self.trading_api.get_account_info(**kwargs)
+
+    def get_history_orders(self, **kwargs):
+        return self.trading_api.get_history_orders(**kwargs)
+
+    def get_positions(self, **kwargs):
+        return self.trading_api.get_positions(**kwargs)
+
+    def place_order(self, **kwargs):
+        return self.trading_api.place_order(**kwargs)
+
+    def unlock_trade(self, acc_id, trade_env, market, password):
+        return self.trading_api.unlock_trade(acc_id, trade_env, market, password)
+
+    # 可以在这里添加计算盈利的方法
+    def calculate_profit(self, **kwargs):
+        # 实现盈利计算逻辑
+        pass

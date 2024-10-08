@@ -1,11 +1,13 @@
+# src/gui/controllers/main_controller.py
+
 import logging
 import re
-from typing import Dict, Any
-
+from typing import Dict, Any, List, Tuple
+from src.utils.error_handler import APIError, TradingLogicError
 from ..viewmodels.main_viewmodel import MainViewModel
 from src.core.trading_logic import TradingLogic
 from src.config.config_manager import ConfigManager
-from src.api.api_manager import APIManager, APIError
+from src.api.api_manager import APIManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +37,9 @@ class MainController:
             result += f"总资金: {total_funds:.2f} | 可用资金: {total_funds:.2f}\n"
             result += f"初始价格: {input_values['initial_price']:.2f} | 止损价格: {input_values['stop_loss_price']:.2f} | 网格数量: {input_values['num_grids']}\n"
             
-            calculation_result = self.trading_logic.run_calculation(input_values)
+            buy_plan, warning_message = self.trading_logic.calculate_buy_plan(**input_values)
             
-            # 移除重复的总资金、初始价格和止损价格信息
-            calculation_result = re.sub(r"总资金:.*\n", "", calculation_result)
-            calculation_result = re.sub(r"初始价格:.*\n", "", calculation_result)
-            calculation_result = re.sub(r"止损价格:.*\n", "", calculation_result)
+            calculation_result = self._format_buy_plan(buy_plan, warning_message)
             
             result += calculation_result
             
@@ -51,11 +50,11 @@ class MainController:
             self.viewmodel.update_status("计算完成")
             
             logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol}")
-        except ValueError as ve:
-            error_message = f"输入错误: {str(ve)}"
+        except TradingLogicError as tle:
+            error_message = f"交易逻辑错误: {str(tle)}"
             logger.error(error_message)
             self.viewmodel.display_results(error_message)
-            self.viewmodel.update_status("计算失败：输入错误")
+            self.viewmodel.update_status("计算失败：交易逻辑错误")
         except Exception as e:
             error_message = f"计算过程中发生错误: {str(e)}"
             logger.error(error_message, exc_info=True)
@@ -64,7 +63,7 @@ class MainController:
         
     def set_stock_price(self, symbol: str) -> None:
         logger.info(f"设置股票价格，标的: {symbol}")
-        if self.viewmodel.api_choice != self.api_manager.current_api:
+        if self.viewmodel.api_choice != self.api_manager.current_price_api:
             self.initialize_api_manager()
 
         try:
@@ -74,14 +73,14 @@ class MainController:
             self.viewmodel.display_results(f"已更新股票 {symbol} 的价格：{current_price:.2f}")
             
             self.main_window.check_widget_visibility()
-        except (APIError, ValueError) as e:
+        except APIError as e:
             self.handle_api_error(str(e), symbol)
         except Exception as e:
             self.handle_api_error(f"获取股票价格时发生未知错误: {str(e)}", symbol)
 
     def _update_price_fields(self, symbol: str, current_price: float, api_used: str) -> None:
         if not current_price:
-            raise ValueError(f"无法从 {api_used} 获取有效的价格数据")
+            raise APIError(f"无法从 {api_used} 获取有效的价格数据")
             
         current_price = round(current_price, 2)
         stop_loss_price = round(current_price * 0.9, 2)
@@ -108,4 +107,13 @@ class MainController:
 
     def initialize_api_manager(self) -> None:
         # 实现API管理器的初始化逻辑
-        pass
+        self.api_manager.switch_price_api(self.viewmodel.api_choice)
+
+    def _format_buy_plan(self, buy_plan: List[Tuple[float, int]], warning_message: str) -> str:
+        result = ""
+        if warning_message:
+            result += warning_message + "\n\n"
+        result += "购买计划如下：\n"
+        for price, quantity in buy_plan:
+            result += f"价格: {price:.2f}, 数量: {quantity}\n"
+        return result

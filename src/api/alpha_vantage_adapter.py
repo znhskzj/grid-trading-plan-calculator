@@ -1,12 +1,12 @@
+# src/api/alpha_vantage_adapter.py
+
 from typing import Tuple
 from alpha_vantage.timeseries import TimeSeries
+from src.utils.logger import setup_logger
+from src.utils.error_handler import PriceQueryError
 from .price_query_interface import PriceQueryInterface
-import logging
 
-logger = logging.getLogger(__name__)
-
-class APIError(Exception):
-    pass
+logger = setup_logger('alpha_vantage', 'logs/alpha_vantage.log')
 
 class AlphaVantageAdapter(PriceQueryInterface):
     def __init__(self, api_key: str):
@@ -18,15 +18,17 @@ class AlphaVantageAdapter(PriceQueryInterface):
             ts = self._get_alpha_vantage_ts()
             data, _ = ts.get_quote_endpoint(symbol)
             if data and '05. price' in data:
-                return float(data['05. price']), 'Alpha Vantage'
+                price = float(data['05. price'])
+                logger.info(f"Successfully retrieved price for {symbol}: {price}")
+                return price, 'Alpha Vantage'
             else:
-                raise APIError(f"Alpha Vantage 未返回 {symbol} 的有效价格数据")
+                raise PriceQueryError(f"Alpha Vantage 未返回 {symbol} 的有效价格数据")
         except Exception as e:
             error_msg = str(e)
             if "Thank you for using Alpha Vantage!" in error_msg:
                 error_msg = "已达到 Alpha Vantage API 的每日请求限制。请稍后再试或切换到其他 API。"
             logger.error(f"从Alpha Vantage获取价格时发生错误: {error_msg}")
-            raise APIError(f"无法获取 {symbol} 的价格: {error_msg}")
+            raise PriceQueryError(f"无法获取 {symbol} 的价格: {error_msg}")
 
     def _get_alpha_vantage_ts(self) -> TimeSeries:
         if self.ts is None:

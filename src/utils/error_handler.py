@@ -1,3 +1,5 @@
+# src/utils/error_handler.py
+
 class APIError(Exception):
     """Base exception for API related errors."""
     pass

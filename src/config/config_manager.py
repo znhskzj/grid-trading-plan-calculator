@@ -1,3 +1,4 @@
+# /src/config/config_manager.py
 
 import os
 import io
@@ -213,4 +214,32 @@ class ConfigManager:
 
     def set_trading_config(self, trading_config: Dict[str, Any]) -> None:
         self.user_config['Trading'] = trading_config
+        self.save_user_config()
+
+    def get_price_query_api_config(self) -> Dict[str, Any]:
+        return self.user_config.get('API', {})
+
+    def get_trading_api_config(self) -> Dict[str, Any]:
+        trading_api = self.user_config['API'].get('trading_api_choice', 'moomoo')
+        if trading_api == 'moomoo':
+            return self.user_config.get('MoomooAPI', {})
+        # 为未来的其他交易API添加支持
+        # elif trading_api == 'fidelity':
+        #     return self.user_config.get('FidelityAPI', {})
+        else:
+            return {}
+
+    def set_price_query_api_config(self, api_config: Dict[str, Any]) -> None:
+        if 'API' not in self.user_config:
+            self.user_config['API'] = {}
+        self.user_config['API'].update(api_config)
+        self.save_user_config()
+
+    def set_trading_api_config(self, api_name: str, api_config: Dict[str, Any]) -> None:
+        if api_name == 'moomoo':
+            self.user_config['MoomooAPI'] = api_config
+        # 为未来的其他交易API添加支持
+        # elif api_name == 'fidelity':
+        #     self.user_config['FidelityAPI'] = api_config
+        self.user_config['API']['trading_api_choice'] = api_name
         self.save_user_config()
