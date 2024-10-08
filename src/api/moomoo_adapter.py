@@ -1,12 +1,11 @@
 # src/api/moomoo_adapter.py
 
-import logging
 import os
 import configparser
 import threading
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, List
 from moomoo import (
     OpenSecTradeContext, TrdSide, OrderType, TrdEnv, TrdMarket, SecurityFirm,
     RET_OK, Currency, OrderStatus
@@ -16,9 +15,9 @@ from src.utils.logger import setup_logger
 from src.utils.error_handler import TradingError
 from .trading_interface import TradingInterface
 
-logger = logging.getLogger(__name__)
+logger = setup_logger('moomoo_adapter')
 
-class MoomooAdapter:
+class MoomooAdapter(TradingInterface):
     def __init__(self, config=None):
         self.config = config or self.load_moomoo_config()
         self.HOST = self.config.get('host', '127.0.0.1')
@@ -28,6 +27,11 @@ class MoomooAdapter:
 
     @staticmethod
     def load_moomoo_config() -> Dict[str, str]:
+        """
+        加载 Moomoo API 配置
+        
+        :return: Moomoo API 配置字典
+        """
         config = configparser.ConfigParser()
         config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'userconfig.ini')
         if not os.path.exists(config_path):
@@ -48,6 +52,14 @@ class MoomooAdapter:
         return dict(config['MoomooAPI'])
 
     def test_moomoo_connection(self, trade_env: TrdEnv, market: TrdMarket, timeout: float = 10.0) -> bool:
+        """
+        测试 Moomoo API 连接
+        
+        :param trade_env: 交易环境
+        :param market: 交易市场
+        :param timeout: 超时时间（秒）
+        :return: 连接是否成功
+        """
         result = [False]
         exception = [None]
 
@@ -80,9 +92,18 @@ class MoomooAdapter:
         return result[0]
 
     def stop_all_connections(self):
+        """停止所有连接"""
         self.stop_event.set()
 
     def get_acc_list(self, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
+        """
+        获取账户列表
+        
+        :param trade_env: 交易环境
+        :param market: 交易市场
+        :return: 账户列表 DataFrame
+        :raises TradingError: 如果获取账户列表失败
+        """
         logger.info(f"Getting account list for trade_env: {trade_env}, market: {market}")
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
@@ -99,6 +120,12 @@ class MoomooAdapter:
 
     @staticmethod
     def select_account(acc_list: pd.DataFrame) -> Optional[int]:
+        """
+        从账户列表中选择一个账户
+        
+        :param acc_list: 账户列表 DataFrame
+        :return: 选中的账户 ID
+        """
         print("\n可用账户:")
         for i, (_, acc) in enumerate(acc_list.iterrows()):
             print(f"{i+1}. 账户ID: {acc['acc_id']}, 类型: {acc['acc_type']}, 环境: {acc['trd_env']}")
@@ -116,6 +143,13 @@ class MoomooAdapter:
                 return None
 
     def get_account_info(self, **kwargs) -> Dict[str, Any]:
+        """
+        获取账户信息
+        
+        :param kwargs: 包含 acc_id, trade_env, market, currency 的字典
+        :return: 账户信息字典
+        :raises TradingError: 如果获取账户信息失败
+        """
         acc_id = kwargs.get('acc_id')
         trade_env = kwargs.get('trade_env')
         market = kwargs.get('market')
@@ -132,7 +166,14 @@ class MoomooAdapter:
             logger.exception(f"获取账户信息时发生错误：{str(e)}")
             raise TradingError(f"获取账户信息失败：{str(e)}")
 
-    def get_history_orders(self, **kwargs) -> Dict[str, Any]:
+    def get_history_orders(self, **kwargs) -> List[Dict[str, Any]]:
+        """
+        获取历史订单
+        
+        :param kwargs: 包含 acc_id, trade_env, market, include_cancelled, days 的字典
+        :return: 历史订单列表
+        :raises TradingError: 如果获取历史订单失败
+        """
         acc_id = kwargs.get('acc_id')
         trade_env = kwargs.get('trade_env')
         market = kwargs.get('market')
@@ -169,7 +210,14 @@ class MoomooAdapter:
             logger.exception(f"获取历史订单信息时发生错误：{str(e)}")
             raise TradingError(f"获取历史订单失败：{str(e)}")
 
-    def get_positions(self, **kwargs) -> Dict[str, Any]:
+    def get_positions(self, **kwargs) -> List[Dict[str, Any]]:
+        """
+        获取持仓信息
+        
+        :param kwargs: 包含 acc_id, trade_env, market 的字典
+        :return: 持仓信息列表
+        :raises TradingError: 如果获取持仓信息失败
+        """
         acc_id = kwargs.get('acc_id')
         trade_env = kwargs.get('trade_env')
         market = kwargs.get('market')
@@ -187,6 +235,13 @@ class MoomooAdapter:
             raise TradingError(f"获取持仓信息失败：{str(e)}")
 
     def place_order(self, **kwargs) -> Any:
+        """
+        下单
+        
+        :param kwargs: 包含 acc_id, trade_env, market, code, price, qty, trd_side 的字典
+        :return: 下单结果
+        :raises TradingError: 如果下单失败
+        """
         acc_id = kwargs.get('acc_id')
         trade_env = kwargs.get('trade_env')
         market = kwargs.get('market')
@@ -222,6 +277,16 @@ class MoomooAdapter:
             raise TradingError(f"下单失败：{str(e)}")
 
     def unlock_trade(self, acc_id: int, trade_env: TrdEnv, market: TrdMarket, password: str) -> bool:
+        """
+        解锁交易
+        
+        :param acc_id: 账户 ID
+        :param trade_env: 交易环境
+        :param market: 交易市场
+        :param password: 交易密码
+        :return: 是否成功解锁
+        :raises TradingError: 如果解锁失败
+        """
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
                 ret, data = trd_ctx.unlock_trade(password, acc_id=acc_id, trd_env=trade_env)
@@ -237,4 +302,29 @@ class MoomooAdapter:
     def close(self):
         """关闭 Moomoo API 连接"""
         # 实现关闭连接的逻辑
+        logger.info("Closing Moomoo API connection")
+        # 如果有需要关闭的资源，在这里添加相应的代码
         pass
+
+    def cancel_order(self, order_id: str, **kwargs) -> bool:
+        """
+        取消订单
+        
+        :param order_id: 订单ID
+        :param kwargs: 额外的参数
+        :return: 是否成功取消订单
+        :raises TradingError: 如果取消订单失败
+        """
+        # 实现取消订单的逻辑
+        pass
+
+    def get_real_time_quotes(self, symbols: List[str], **kwargs) -> Dict[str, Any]:
+        """
+        获取实时报价
+        
+        :param symbols: 股票代码列表
+        :param kwargs: 额外的参数
+        :return: 实时报价字典
+        :raises TradingError: 如果获取实时报价失败
+        """
+        # 实现

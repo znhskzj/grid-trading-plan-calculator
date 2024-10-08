@@ -7,7 +7,7 @@ from src.utils.logger import setup_logger
 from src.utils.error_handler import TradingLogicError
 from src.config.config_manager import ConfigManager
 
-logger = setup_logger('trading_logic', 'logs/trading_logic.log')
+logger = setup_logger('trading_logic')
 
 class TradingLogic:
     def __init__(self):
@@ -15,7 +15,16 @@ class TradingLogic:
         self.trading_config: Dict[str, Any] = self.config_manager.get_trading_config()
 
     def validate_inputs(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> None:
-        """验证输入参数的有效性"""
+        """
+        验证输入参数的有效性
+        
+        :param funds: 总资金
+        :param initial_price: 初始价格
+        :param stop_loss_price: 止损价格
+        :param num_grids: 网格数量
+        :param allocation_method: 分配方式
+        :raises TradingLogicError: 如果输入无效
+        """
         if funds <= 0:
             raise TradingLogicError("总资金必须是正数")
         if initial_price <= 0:
@@ -34,7 +43,16 @@ class TradingLogic:
             raise TradingLogicError("网格数量不能超过100")
 
     def calculate_buy_plan(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> Tuple[List[Tuple[float, int]], str]:
-        """计算购买计划"""
+        """
+        计算购买计划
+        
+        :param funds: 总资金
+        :param initial_price: 初始价格
+        :param stop_loss_price: 止损价格
+        :param num_grids: 网格数量
+        :param allocation_method: 分配方式
+        :return: 购买计划列表和警告信息
+        """
         logger.info("开始执行 calculate_buy_plan 函数")
         
         # 使用 trading_config 中的默认值
@@ -93,6 +111,14 @@ class TradingLogic:
         return buy_plan, warning_message
         
     def save_recent_calculation(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int) -> None:
+        """
+        保存最近的计算结果
+        
+        :param funds: 总资金
+        :param initial_price: 初始价格
+        :param stop_loss_price: 止损价格
+        :param num_grids: 网格数量
+        """
         recent_calc: Dict[str, str] = {
             'funds': str(funds),
             'initial_price': str(initial_price),
@@ -102,7 +128,14 @@ class TradingLogic:
         self.config_manager.set_config('RecentCalculations', recent_calc)
 
     def calculate_weights(self, prices: List[float], method: int, max_shares: int) -> List[int]:
-        """计算不同分配方式的权重"""
+        """
+        计算不同分配方式的权重
+        
+        :param prices: 价格列表
+        :param method: 分配方法
+        :param max_shares: 最大股数
+        :return: 各价格点的股数列表
+        """
         logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}")
 
         if len(prices) == 1:
@@ -125,11 +158,21 @@ class TradingLogic:
         return initial_shares
 
     def equal_amount_allocation(self, num_prices: int) -> List[float]:
-        """等金额分配方法"""
+        """
+        等金额分配方法
+        
+        :param num_prices: 价格点数量
+        :return: 权重列表
+        """
         return [1.0] * num_prices
 
     def exponential_allocation(self, prices: List[float]) -> List[float]:
-        """指数分配方法"""
+        """
+        指数分配方法
+        
+        :param prices: 价格列表
+        :return: 权重列表
+        """
         max_price: float = max(prices)
         min_price: float = min(prices)
         price_range: float = max_price - min_price
@@ -138,11 +181,22 @@ class TradingLogic:
         return [np.exp(3 * (max_price - price) / price_range) for price in prices]
 
     def linear_weighted_allocation(self, num_prices: int) -> List[float]:
-        """线性加权分配方法"""
+        """
+        线性加权分配方法
+        
+        :param num_prices: 价格点数量
+        :return: 权重列表
+        """
         return list(range(1, num_prices + 1))
 
     def calculate_with_reserve(self, input_values: Dict[str, Any], reserve_percentage: int) -> Tuple[List[Tuple[float, int]], str, float]:
-        """执行保留部分资金的计算"""
+        """
+        执行保留部分资金的计算
+        
+        :param input_values: 输入值字典
+        :param reserve_percentage: 保留资金百分比
+        :return: 购买计划、警告信息和保留资金
+        """
         logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
         
         total_funds: float = input_values['funds']

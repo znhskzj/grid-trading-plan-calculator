@@ -6,7 +6,7 @@ from src.utils.logger import setup_logger
 from src.utils.error_handler import PriceQueryError
 from .price_query_interface import PriceQueryInterface
 
-logger = setup_logger('alpha_vantage', 'logs/alpha_vantage.log')
+logger = setup_logger('alpha_vantage')
 
 class AlphaVantageAdapter(PriceQueryInterface):
     def __init__(self, api_key: str):
@@ -14,6 +14,13 @@ class AlphaVantageAdapter(PriceQueryInterface):
         self.ts = None
 
     def get_stock_price(self, symbol: str) -> Tuple[float, str]:
+        """
+        获取股票价格
+        
+        :param symbol: 股票代码
+        :return: (价格, API名称)
+        :raises PriceQueryError: 如果无法获取价格数据
+        """
         try:
             ts = self._get_alpha_vantage_ts()
             data, _ = ts.get_quote_endpoint(symbol)
@@ -31,6 +38,12 @@ class AlphaVantageAdapter(PriceQueryInterface):
             raise PriceQueryError(f"无法获取 {symbol} 的价格: {error_msg}")
 
     def _get_alpha_vantage_ts(self) -> TimeSeries:
+        """
+        获取或创建 Alpha Vantage TimeSeries 对象
+        
+        :return: TimeSeries 对象
+        :raises ImportError: 如果 alpha_vantage 库未安装
+        """
         if self.ts is None:
             try:
                 self.ts = TimeSeries(key=self.api_key)

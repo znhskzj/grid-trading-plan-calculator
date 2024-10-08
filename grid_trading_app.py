@@ -1,4 +1,4 @@
-# grid_trading_app.py
+# /grid_trading_app.py
 
 import os
 import sys
@@ -27,7 +27,7 @@ if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
 
 # 设置日志
-LOG_DIR = 'logs'
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 logger = setup_logger(__name__, os.path.join(LOG_DIR, 'grid_trading.log'))
 

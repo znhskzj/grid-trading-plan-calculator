@@ -3,11 +3,12 @@
 import os
 import io
 import configparser
-import logging
 import json
+import difflib
 from typing import Dict, Any
+from src.utils.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger('config_manager')
 
 DEFAULT_CONFIG = {
     'General': {
@@ -87,8 +88,9 @@ class ConfigManager:
 
     def load_system_config(self) -> Dict[str, Any]:
         """
-        加载系统配置。
-        如果配置文件不存在，则使用默认配置。
+        加载系统配置。如果配置文件不存在，则使用默认配置。
+        
+        :return: 系统配置字典
         """
         config = configparser.ConfigParser()
         config.read_dict(DEFAULT_CONFIG)
@@ -99,6 +101,9 @@ class ConfigManager:
         return {section: dict(config[section]) for section in config.sections()}
 
     def save_system_config(self) -> None:
+        """
+        保存系统配置到文件
+        """
         config_parser = configparser.ConfigParser()
         for section, values in self.system_config.items():
             config_parser[section] = values
@@ -108,6 +113,11 @@ class ConfigManager:
         logger.info(f"系统配置已保存到 {self.system_config_path}")
 
     def load_user_config(self) -> Dict[str, Any]:
+        """
+        加载用户配置。如果配置文件不存在或为空，则使用默认配置。
+        
+        :return: 用户配置字典
+        """
         config = configparser.ConfigParser()
         if os.path.exists(self.user_config_path):
             with io.open(self.user_config_path, 'r', encoding='utf-8') as f:
@@ -115,11 +125,9 @@ class ConfigManager:
         
         user_config = {section: dict(config[section]) for section in config.sections()}
         
-        # 如果配置为空，返回默认配置
         if not user_config:
             return DEFAULT_USER_CONFIG.copy()
         
-        # 使用默认配置填充缺失的部分
         for section, values in DEFAULT_USER_CONFIG.items():
             if section not in user_config:
                 user_config[section] = {}
@@ -130,15 +138,21 @@ class ConfigManager:
         return user_config
 
     def save_user_config(self) -> None:
+        """
+        保存用户配置到文件
+        """
         config_parser = configparser.ConfigParser()
         for section, options in self.user_config.items():
-            config_parser[section] = {k: str(v) for k, v in options.items()}  # 确保所有值都转换为字符串
+            config_parser[section] = {k: str(v) for k, v in options.items()}
         
         with open(self.user_config_path, 'w', encoding='utf-8') as configfile:
             config_parser.write(configfile)
         logger.info(f"用户配置已保存到 {self.user_config_path}")
 
-    def ensure_config_structure(self):
+    def ensure_config_structure(self) -> None:
+        """
+        确保用户配置结构完整
+        """
         for section, values in DEFAULT_USER_CONFIG.items():
             if section not in self.user_config:
                 self.user_config[section] = {}
@@ -147,47 +161,52 @@ class ConfigManager:
                     self.user_config[section][key] = default_value
 
     def load_configurations(self) -> None:
+        """
+        加载系统和用户配置
+        """
         self.system_config = self.load_system_config()
         self.user_config = self.load_user_config()
         self.ensure_config_structure()
 
     def save_user_settings(self) -> None:
-        """保存用户设置"""
+        """
+        保存用户设置并进行配置比较
+        """
         try:
-            # 更新用户配置
-            # 注意：这里需要修改，因为 self.api_choice 等属性不应该在 ConfigManager 中
-            # 这部分逻辑应该在 GUI 类中处理，然后调用 ConfigManager 的方法来保存
             self.save_user_config()
             logger.info("用户设置已自动保存")
 
-            # 加载保存后的配置进行比较
             loaded_config = self.load_user_config()
             
-            # 比较配置
             if self.user_config != loaded_config:
                 logger.warning("保存的配置与加载的配置不匹配，可能存在保存问题")
-                # 使用 json.dumps 来创建可比较的字符串
                 original = json.dumps(self.user_config, sort_keys=True)
                 loaded = json.dumps(loaded_config, sort_keys=True)
                 logger.debug(f"原始配置: {original}")
                 logger.debug(f"加载的配置: {loaded}")
-                # 找出差异
-                import difflib
                 diff = list(difflib.unified_diff(original.splitlines(), loaded.splitlines()))
                 logger.debug(f"配置差异:\n" + "\n".join(diff))
         except Exception as e:
             logger.error(f"保存用户设置时发生错误: {str(e)}", exc_info=True)
 
-    def load_user_settings(self) -> None:
-        """加载用户设置"""
-        # 这个方法应该在 GUI 类中实现，因为它涉及到 GUI 组件的更新
-        pass
-
     def get_config(self, key: str, default: Any = None) -> Any:
-        # 先从用户配置中查找，如果没有再从系统配置中查找
+        """
+        获取配置值
+        
+        :param key: 配置键
+        :param default: 默认值
+        :return: 配置值
+        """
         return self.user_config.get(key, self.system_config.get(key, default))
 
     def set_config(self, key: str, value: Any, is_system_config: bool = False) -> None:
+        """
+        设置配置值
+        
+        :param key: 配置键
+        :param value: 配置值
+        :param is_system_config: 是否为系统配置
+        """
         if is_system_config:
             self.system_config[key] = value
             self.save_system_config()
@@ -196,30 +215,60 @@ class ConfigManager:
             self.save_user_config()
 
     def reset_to_default(self) -> None:
-        # 重置配置到默认状态
+        """
+        重置用户配置到默认状态
+        """
         self.user_config = DEFAULT_USER_CONFIG.copy()
         self.save_user_config()
 
-    # API 相关方法
     def get_api_config(self) -> Dict[str, Any]:
+        """
+        获取API配置
+        
+        :return: API配置字典
+        """
         return self.user_config.get('API', {})
 
     def set_api_config(self, api_config: Dict[str, Any]) -> None:
+        """
+        设置API配置
+        
+        :param api_config: API配置字典
+        """
         self.user_config['API'] = api_config
         self.save_user_config()
 
-    # 交易逻辑相关方法
     def get_trading_config(self) -> Dict[str, Any]:
+        """
+        获取交易配置
+        
+        :return: 交易配置字典
+        """
         return self.user_config.get('Trading', {})
 
     def set_trading_config(self, trading_config: Dict[str, Any]) -> None:
+        """
+        设置交易配置
+        
+        :param trading_config: 交易配置字典
+        """
         self.user_config['Trading'] = trading_config
         self.save_user_config()
 
     def get_price_query_api_config(self) -> Dict[str, Any]:
+        """
+        获取价格查询API配置
+        
+        :return: 价格查询API配置字典
+        """
         return self.user_config.get('API', {})
 
     def get_trading_api_config(self) -> Dict[str, Any]:
+        """
+        获取交易API配置
+        
+        :return: 交易API配置字典
+        """
         trading_api = self.user_config['API'].get('trading_api_choice', 'moomoo')
         if trading_api == 'moomoo':
             return self.user_config.get('MoomooAPI', {})
@@ -230,12 +279,23 @@ class ConfigManager:
             return {}
 
     def set_price_query_api_config(self, api_config: Dict[str, Any]) -> None:
+        """
+        设置价格查询API配置
+        
+        :param api_config: 价格查询API配置字典
+        """
         if 'API' not in self.user_config:
             self.user_config['API'] = {}
         self.user_config['API'].update(api_config)
         self.save_user_config()
 
     def set_trading_api_config(self, api_name: str, api_config: Dict[str, Any]) -> None:
+        """
+        设置交易API配置
+        
+        :param api_name: API名称
+        :param api_config: API配置字典
+        """
         if api_name == 'moomoo':
             self.user_config['MoomooAPI'] = api_config
         # 为未来的其他交易API添加支持

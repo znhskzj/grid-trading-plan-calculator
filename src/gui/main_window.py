@@ -1,6 +1,7 @@
 # /src/gui/main_window.py
 
 import tkinter as tk
+import logging
 from tkinter import ttk
 from tkinter import messagebox
 from typing import Dict, Any
@@ -14,7 +15,7 @@ from .components.status_bar import StatusBar
 from .controllers.main_controller import MainController
 from src.config.config_manager import ConfigManager
 
-logger = setup_logger('main_window', 'logs/main_window.log')
+logger = logging.getLogger(__name__)
 
 class MainWindow:
     def __init__(self, master: tk.Tk, version: str):

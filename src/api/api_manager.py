@@ -8,12 +8,11 @@ from .yahoo_finance_adapter import YahooFinanceAdapter
 from .moomoo_adapter import MoomooAdapter
 from src.config.config_manager import ConfigManager
 
-logger = setup_logger('api_manager', 'logs/api_manager.log')
+logger = setup_logger('api_manager')
 
 class APIManager:
     def __init__(self):
         self.config_manager = ConfigManager()
-        self.trading_api = MoomooAdapter(self.config_manager.get_config('MoomooAPI', {}))
         self.api_config = self.config_manager.get_api_config()
         self.current_price_api = self.api_config.get('choice', 'yahoo')
         
@@ -25,6 +24,13 @@ class APIManager:
         self.trading_api = MoomooAdapter(self.config_manager.get_config('MoomooAPI', {}))
 
     def get_stock_price(self, symbol: str) -> Tuple[float, str]:
+        """
+        获取股票价格
+        
+        :param symbol: 股票代码
+        :return: (价格, API名称)
+        :raises PriceQueryError: 如果无法获取价格
+        """
         try:
             return self.price_query_apis[self.current_price_api].get_stock_price(symbol)
         except PriceQueryError as e:
@@ -32,6 +38,12 @@ class APIManager:
             raise
 
     def switch_price_api(self, api_name: str):
+        """
+        切换价格查询 API
+        
+        :param api_name: API 名称
+        :raises ValueError: 如果指定的 API 不支持
+        """
         if api_name not in self.price_query_apis:
             raise ValueError(f"不支持的 API: {api_name}")
         self.current_price_api = api_name
@@ -70,6 +82,5 @@ class APIManager:
     def close_all_connections(self):
         """关闭所有API连接"""
         if hasattr(self, 'trading_api'):
-            # 假设 MoomooAdapter 有一个 close 方法
             self.trading_api.close()
         # 如果有其他 API 连接，也在这里关闭它们
