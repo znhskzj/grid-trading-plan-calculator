@@ -1,5 +1,8 @@
+# /src/gui/main_window.py
+
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 from typing import Dict, Any
 
 from src.utils.logger import setup_logger
@@ -137,3 +140,29 @@ class MainWindow:
         
         layout_info = self.result_frame.grid_info()
         logger.debug(f"结果框架布局信息: {layout_info}")
+
+    def update_status_bar(self, message: str) -> None:
+        if hasattr(self, 'status_bar'):
+            self.status_bar.config(text=message)
+        else:
+            print(f"Status: {message}")  # 如果状态栏还未创建,则打印到控制台
+
+    def show_info(self, title, message):
+        messagebox.showinfo(title, message)
+
+    def show_warning(self, title, message):
+        messagebox.showwarning(title, message)
+
+    def on_closing(self):
+        """处理窗口关闭事件"""
+        if messagebox.askokcancel("退出", "确定要退出程序吗？"):
+            # 执行任何必要的清理操作
+            if hasattr(self, 'controller'):
+                # 保存配置
+                self.controller.save_config()
+                # 关闭任何打开的连接
+                if hasattr(self.controller, 'api_manager'):
+                    self.controller.api_manager.close_all_connections()
+            
+            # 销毁窗口
+            self.master.destroy()

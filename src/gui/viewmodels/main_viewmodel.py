@@ -1,3 +1,5 @@
+# /src/gui/viewmodels/main_viewmodel.py
+
 from typing import Dict, Any, Optional
 import logging
 from src.utils.error_handler import InputValidationError
@@ -16,6 +18,8 @@ class MainViewModel:
         self.current_symbol: str = ""
         self.status_message: str = ""
         self.result_message: str = ""
+        self.trade_mode: str = "模拟"
+        self.market: str = "美股"
 
     def update_stock_symbol(self, symbol: str) -> None:
         """更新股票代码并触发相关更新"""
@@ -109,3 +113,37 @@ class MainViewModel:
             "status": self.status_message,
             "result": self.result_message
         }
+    
+    def update_calculation_inputs(self, total_investment: float, grid_levels: int, allocation_method: str) -> None:
+        """更新计算相关的输入值"""
+        self.total_investment = total_investment
+        self.grid_levels = grid_levels
+        self.allocation_method = allocation_method
+        logger.info(f"更新计算输入: 总投资={total_investment}, 网格数量={grid_levels}, 分配方法={allocation_method}")
+
+    def bulk_update(self, data: Dict[str, Any]) -> None:
+        """批量更新多个字段"""
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        logger.info("批量更新ViewModel字段")
+
+    def get_trade_env(self) -> str:
+        """获取交易环境（真实/模拟）"""
+        # 这个方法需要根据实际情况实现
+        return "模拟"  # 默认返回模拟环境
+
+    def get_market(self) -> str:
+        """获取交易市场（美股/港股）"""
+        # 这个方法需要根据实际情况实现
+        return "美股"  # 默认返回美股市场
+    
+    def update_trade_mode(self, mode: str) -> None:
+        """更新交易模式"""
+        self.trade_mode = mode
+        logger.info(f"交易模式更新为: {mode}")
+
+    def update_market(self, market: str) -> None:
+        """更新交易市场"""
+        self.market = market
+        logger.info(f"交易市场更新为: {market}")

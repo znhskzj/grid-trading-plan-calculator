@@ -13,6 +13,7 @@ logger = setup_logger('api_manager', 'logs/api_manager.log')
 class APIManager:
     def __init__(self):
         self.config_manager = ConfigManager()
+        self.trading_api = MoomooAdapter(self.config_manager.get_config('MoomooAPI', {}))
         self.api_config = self.config_manager.get_api_config()
         self.current_price_api = self.api_config.get('choice', 'yahoo')
         
@@ -65,3 +66,10 @@ class APIManager:
     def calculate_profit(self, **kwargs):
         # 实现盈利计算逻辑
         pass
+
+    def close_all_connections(self):
+        """关闭所有API连接"""
+        if hasattr(self, 'trading_api'):
+            # 假设 MoomooAdapter 有一个 close 方法
+            self.trading_api.close()
+        # 如果有其他 API 连接，也在这里关闭它们

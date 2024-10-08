@@ -1,27 +1,51 @@
 # src/api/moomoo_adapter.py
 
+import logging
 import os
+import configparser
+import threading
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, Tuple
 from moomoo import (
     OpenSecTradeContext, TrdSide, OrderType, TrdEnv, TrdMarket, SecurityFirm,
     RET_OK, Currency, OrderStatus
 )
-import pandas as pd
-import threading
+
 from src.utils.logger import setup_logger
 from src.utils.error_handler import TradingError
 from .trading_interface import TradingInterface
 
-logger = setup_logger('moomoo', 'logs/moomoo.log')
+logger = logging.getLogger(__name__)
 
-class MoomooAdapter(TradingInterface):
-    def __init__(self, config):
-        self.config = config
-        self.HOST = config.get('host', '127.0.0.1')
-        self.PORT = int(config.get('port', '11111'))
-        self.SECURITY_FIRM = getattr(SecurityFirm, config.get('security_firm', 'FUTUINC'))
+class MoomooAdapter:
+    def __init__(self, config=None):
+        self.config = config or self.load_moomoo_config()
+        self.HOST = self.config.get('host', '127.0.0.1')
+        self.PORT = int(self.config.get('port', '11111'))
+        self.SECURITY_FIRM = getattr(SecurityFirm, self.config.get('security_firm', 'FUTUINC'))
         self.stop_event = threading.Event()
+
+    @staticmethod
+    def load_moomoo_config() -> Dict[str, str]:
+        config = configparser.ConfigParser()
+        config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'userconfig.ini')
+        if not os.path.exists(config_path):
+            logger.warning("userconfig.ini not found. Using default values.")
+            return {
+                'host': '127.0.0.1',
+                'port': '11111',
+                'security_firm': 'FUTUINC'
+            }
+        config.read(config_path)
+        if 'MoomooAPI' not in config:
+            logger.warning("MoomooAPI section not found in userconfig.ini. Using default values.")
+            return {
+                'host': '127.0.0.1',
+                'port': '11111',
+                'security_firm': 'FUTUINC'
+            }
+        return dict(config['MoomooAPI'])
 
     def test_moomoo_connection(self, trade_env: TrdEnv, market: TrdMarket, timeout: float = 10.0) -> bool:
         result = [False]
@@ -209,3 +233,8 @@ class MoomooAdapter(TradingInterface):
         except Exception as e:
             logger.exception(f"解锁交易时发生错误：{str(e)}")
             raise TradingError(f"解锁交易失败：{str(e)}")
+        
+    def close(self):
+        """关闭 Moomoo API 连接"""
+        # 实现关闭连接的逻辑
+        pass

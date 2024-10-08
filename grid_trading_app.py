@@ -9,6 +9,10 @@ from src.config.config_manager import ConfigManager
 from src.utils.logger import setup_logger
 from src.utils.error_handler import ConfigurationError, GUIError
 from version import VERSION, AUTHOR, DATE
+import io
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 __doc__ = f"""
 Grid Trading Tool
@@ -16,6 +20,11 @@ Version: {VERSION}
 Author: {AUTHOR}
 Date: {DATE}
 """
+
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # 设置日志
 LOG_DIR = 'logs'

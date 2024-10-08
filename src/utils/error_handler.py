@@ -27,3 +27,7 @@ class ConfigurationError(BaseError):
 class GUIError(BaseError):
     """Exception raised for errors in GUI operations."""
     pass
+
+class TradingLogicError(BaseError):
+    """Exception raised for errors in trading logic calculations."""
+    pass

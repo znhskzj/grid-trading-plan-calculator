@@ -1,11 +1,15 @@
 # src/gui/controllers/main_controller.py
 
 import logging
+import pandas as pd
+from tkinter import messagebox, simpledialog
+import tkinter as tk
 from typing import Dict, Any, List, Tuple, Optional
 from src.utils.error_handler import APIError, TradingLogicError, InputValidationError
 from ..viewmodels.main_viewmodel import MainViewModel
 from src.core.trading_logic import TradingLogic
 from src.config.config_manager import ConfigManager
+from src.api.moomoo_adapter import MoomooAdapter, TrdEnv, TrdMarket
 from src.api.api_manager import APIManager
 
 logger = logging.getLogger(__name__)
@@ -17,6 +21,86 @@ class MainController:
         self.trading_logic = TradingLogic()
         self.config_manager = ConfigManager()
         self.api_manager = APIManager()
+        self.moomoo_api = self.api_manager.trading_api  # 使用 APIManager 中的 MoomooAdapter 实例
+        self.current_acc_id = None
+        self.trade_env = TrdEnv.SIMULATE
+        self.market = TrdMarket.US
+        self.moomoo_connected = False
+        self.last_connected_env = None
+        self.last_connected_market = None
+        self.force_simulate = False
+
+    def get_current_account(self):
+        self.trade_env = TrdEnv.REAL if self.viewmodel.trade_mode == "真实" else TrdEnv.SIMULATE
+        self.market = TrdMarket.US if self.viewmodel.market == "美股" else TrdMarket.HK
+        logger.info(f"Current settings: trade_env={self.trade_env}, market={self.market}")
+        acc_list = self.moomoo_api.get_acc_list(self.trade_env, self.market)
+        if acc_list is not None and not acc_list.empty:
+            self.current_acc_id = acc_list.iloc[0]['acc_id']
+            logger.info(f"Selected account: {self.current_acc_id}")
+        else:
+            self.current_acc_id = None
+            logger.warning("No accounts found")
+
+    def query_available_funds(self):
+        if not self._validate_account_access():
+            return
+        
+        info = self.moomoo_api.get_account_info(self.current_acc_id, self.trade_env, self.market)
+        if info is not None and not info.empty:
+            self._display_account_info(info)
+        else:
+            self.viewmodel.display_results("无法获取账户信息")
+
+    def _validate_account_access(self) -> bool:
+        if not self.check_moomoo_connection():
+            return False
+        if self.current_acc_id is None:
+            self.viewmodel.display_results("无法获取账户信息")
+            return False
+        return True
+
+    def _display_account_info(self, info: pd.DataFrame):
+        env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
+        market_str = "美股" if self.market == TrdMarket.US else "港股"
+        result = f"当前连接: {market_str}{env_str}账户\n"
+        result += f"账户 {self.current_acc_id} 资金情况:\n"
+        
+        def safe_format(value):
+            try:
+                return f"${float(value):,.2f}" if value != 'N/A' else 'N/A'
+            except ValueError:
+                return str(value)
+        
+        fields = [
+            ("总资产", 'total_assets'),
+            ("现金", 'cash'),
+            ("证券市值", 'securities_assets'),
+            ("购买力", 'power'),
+            ("最大购买力", 'max_power_short'),
+            ("币种", 'currency')
+        ]
+        
+        for label, key in fields:
+            value = safe_format(info[key].values[0])
+            if value != 'N/A' and value != '$N/A':
+                result += f"{label}: {value}\n"
+        
+        self.viewmodel.display_results(result)
+        self.viewmodel.update_status(f"Moomoo API - {market_str}{env_str}账户 - 资金查询完成")
+
+    def test_moomoo_connection(self):
+        trade_env = self.viewmodel.get_trade_env()
+        market = self.viewmodel.get_market()
+        try:
+            result = self.api_manager.test_moomoo_connection(trade_env, market)
+            if result:
+                self.viewmodel.update_status("Moomoo 连接测试成功")
+            else:
+                self.viewmodel.update_status("Moomoo 连接测试失败")
+        except Exception as e:
+            self.viewmodel.update_status(f"Moomoo 连接测试错误: {str(e)}")
+            logger.error(f"Moomoo 连接测试错误: {str(e)}")
     
     def run_calculation(self) -> None:
         """执行购买计划计算"""
@@ -158,3 +242,157 @@ class MainController:
             # 保存其他配置...
         }
         self.config_manager.set_config('Trading', config)
+
+    def save_to_csv(self):
+        try:
+            # 这里实现保存到CSV的逻辑
+            # 可以调用 ResultFrame 中的方法来获取结果并保存
+            self.main_window.result_frame.save_to_csv()
+            self.viewmodel.update_status("结果已保存为CSV文件")
+        except Exception as e:
+            self.viewmodel.update_status(f"保存CSV文件时发生错误: {str(e)}")
+            logger.error(f"保存CSV文件时发生错误: {str(e)}", exc_info=True)
+
+    def update_status(self, message: str) -> None:
+        """更新状态栏信息"""
+        max_length = 100  # 可以根据需要调整
+        if len(message) > max_length:
+            message = message[:max_length] + "..."
+        self.viewmodel.update_status(message)
+        self.main_window.update_status_bar(message)
+
+    def display_results(self, result: str) -> None:
+        """显示结果"""
+        logger.debug(f"Input result to display_results: {result}")
+        
+        def update_result_text():
+            if not hasattr(self.main_window, 'result_text'):
+                logger.error("result_text widget not found")
+                return
+            
+            result_text = self.main_window.result_text
+            result_text.delete(1.0, tk.END)
+            result_text.insert(tk.END, result)
+            result_text.see("1.0")  # 滚动到顶部
+            
+            self.main_window.result_frame.update()
+            result_text.update()
+            self.main_window.master.update_idletasks()
+            
+            logger.debug("Results displayed in result_text widget")
+            self.main_window.check_widget_visibility()
+
+        self.main_window.master.after(0, update_result_text)
+        
+        # 更新状态栏
+        first_line = result.split('\n')[0] if result else "无结果"
+        self.update_status(first_line)
+
+        # 更新 ViewModel
+        self.viewmodel.display_results(result)
+
+    def reset_to_default(self):
+        """重置所有设置到默认状态,但保留常用标的和Moomoo设置"""
+        logger.info("用户重置为默认值")
+
+        # 获取当前的用户配置
+        current_config = self.config_manager.get_user_config()
+        # 获取系统默认配置
+        system_config = self.config_manager.get_system_config()
+
+        # 重新初始化 user_config
+        new_config = {
+            'API': {
+                'choice': 'yahoo',
+                'alpha_vantage_key': current_config.get('API', {}).get('alpha_vantage_key', '')
+            },
+            'General': {
+                'allocation_method': system_config.get('General', {}).get('default_allocation_method', '1'),
+            },
+            'RecentCalculations': {
+                'funds': system_config.get('General', {}).get('default_funds', '10000'),
+                'initial_price': system_config.get('General', {}).get('default_initial_price', '100'),
+                'stop_loss_price': system_config.get('General', {}).get('default_stop_loss_price', '90'),
+                'num_grids': system_config.get('General', {}).get('default_num_grids', '5')
+            },
+            'CommonStocks': current_config.get('CommonStocks', {}),  # 保留现有的常用标的
+            'MoomooSettings': current_config.get('MoomooSettings', {}),  # 保留现有的Moomoo设置
+            'MoomooAPI': current_config.get('MoomooAPI', {})  # 保留MoomooAPI设置
+        }
+
+        self.config_manager.save_user_config(new_config)
+        self.update_ui_from_config(new_config)
+
+        reset_message = "除常用标的和Moomoo设置外,所有设置已重置为默认值"
+        self.viewmodel.update_status(reset_message)
+        self.viewmodel.display_results(reset_message)
+        self._initialize_api_manager()
+
+    def update_ui_from_config(self, config):
+        """根据配置更新 UI 组件"""
+        self.viewmodel.update_from_config(config)
+        self.update_status("UI 已根据配置更新")
+        self.main_window.update_from_viewmodel()
+
+    def place_order_by_plan(self):
+        if not self._validate_account_access():
+            return
+        
+        # 实现按计划下单的逻辑
+        # 使用 self.moomoo_api.place_order 来执行下单
+        # 处理下单结果并更新 ViewModel
+
+    def query_positions(self):
+        if not self._validate_account_access():
+            return
+        
+        positions = self.moomoo_api.get_positions(self.current_acc_id, self.trade_env, self.market)
+        if positions is not None and not positions.empty:
+            # 处理持仓信息并更新 ViewModel
+            self._display_positions(positions)
+        else:
+            self.viewmodel.display_results("无法获取持仓信息或没有持仓")
+
+    def query_history_orders(self):
+        if not self._validate_account_access():
+            return
+        
+        orders = self.moomoo_api.get_history_orders(self.current_acc_id, self.trade_env, self.market)
+        if orders is not None and not orders.empty:
+            # 处理历史订单信息并更新 ViewModel
+            self._display_history_orders(orders)
+        else:
+            self.viewmodel.display_results("无法获取历史订单信息或没有历史订单")
+
+    def _display_positions(self, positions: pd.DataFrame):
+        # 实现显示持仓信息的逻辑
+        pass
+
+    def _display_history_orders(self, orders: pd.DataFrame):
+        # 实现显示历史订单的逻辑
+        pass
+
+    def check_moomoo_connection(self) -> bool:
+        current_env = TrdEnv.REAL if self.viewmodel.trade_mode == "真实" else TrdEnv.SIMULATE
+        current_market = TrdMarket.US if self.viewmodel.market == "美股" else TrdMarket.HK
+
+        if not self.moomoo_connected or self.last_connected_env != current_env or self.last_connected_market != current_market:
+            result = self.moomoo_api.test_moomoo_connection(current_env, current_market)
+            if result:
+                self.moomoo_connected = True
+                self.last_connected_env = current_env
+                self.last_connected_market = current_market
+                return True
+            else:
+                self.main_window.show_warning("未连接", "请先在Moomoo设置中完成测试连接")
+                return False
+        return True
+    
+    def enable_real_time_notifications(self):
+        if not self.check_moomoo_connection():
+            return
+        message = "实时通知功能需要注册用户并付费开通。\n根据discord群的喊单记录直接调用解析指令并生成购买计划\n请联系作者了解更多信息。"
+        self.viewmodel.display_results(message)
+        self.main_window.show_info("实时通知", message)
+
+    
