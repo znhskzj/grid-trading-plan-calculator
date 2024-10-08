@@ -1,25 +1,30 @@
 # src/gui/components/result_frame.py
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import logging
 import csv
 import os
 from datetime import datetime
-from typing import List
+from typing import List, Any
+from src.utils.logger import setup_logger
 from src.utils.gui_helpers import exception_handler, get_project_root
+from src.utils.error_handler import GUIError
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 class ResultFrame(tk.Frame):
-    def __init__(self, master, controller):
+    def __init__(self, master: tk.Widget, controller: Any):
         super().__init__(master)
         self.controller = controller
         self.create_widgets()
 
-    def create_widgets(self):
-        self.create_result_text()
+    def create_widgets(self) -> None:
+        try:
+            self.create_result_text()
+        except Exception as e:
+            self.handle_gui_error("创建结果框架组件时发生错误", e)
 
-    def create_result_text(self):
+    def create_result_text(self) -> None:
         self.result_text = tk.Text(self, wrap=tk.WORD, height=20, width=80)
         self.result_text.pack(expand=True, fill=tk.BOTH)
         
@@ -28,26 +33,26 @@ class ResultFrame(tk.Frame):
         self.result_text.configure(yscrollcommand=scrollbar.set)
     
     def display_results(self, result: str) -> None:
-        logger.debug(f"Displaying results: {result[:100]}...")  # Log first 100 chars to avoid excessive logging
+        logger.debug(f"显示结果: {result[:100]}...")  # 只记录前100个字符，避免过多日志
         
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, result)
-        self.result_text.see("1.0")  # Scroll to top
+        self.result_text.see("1.0")  # 滚动到顶部
         
         self.update()
         self.result_text.update()
         
-        # Update status bar
+        # 更新状态栏
         first_line = result.split('\n')[0] if result else "无结果"
         self.controller.update_status(first_line)
         
     def _format_result_lines(self, lines: List[str]) -> List[str]:
-        logging.debug(f"Input lines to _format_result_lines: {lines}")
+        logger.debug(f"格式化结果行的输入: {lines}")
         formatted_lines = []
         
         if not lines:
-            logging.warning("Empty input to _format_result_lines")
-            return formatted_lines  # 返回空列表而不是 None
+            logger.warning("_format_result_lines 的输入为空")
+            return formatted_lines
         
         if lines[0].startswith("标的:"):
             formatted_lines.append(lines.pop(0))
@@ -57,7 +62,7 @@ class ResultFrame(tk.Frame):
         else:
             formatted_lines.extend(self._format_trading_plan(lines))
         
-        logging.debug(f"Formatted lines: {formatted_lines}")
+        logger.debug(f"格式化后的行: {formatted_lines}")
         return formatted_lines
 
     def _format_trading_plan(self, lines: List[str]) -> List[str]:
@@ -112,8 +117,11 @@ class ResultFrame(tk.Frame):
         if not file_path:
             return
 
-        self._write_csv_file(file_path, content)
-        messagebox.showinfo("成功", f"结果已保存到 {file_path}")
+        try:
+            self._write_csv_file(file_path, content)
+            messagebox.showinfo("成功", f"结果已保存到 {file_path}")
+        except Exception as e:
+            self.handle_gui_error("保存CSV文件时发生错误", e)
 
     def _get_save_file_path(self) -> str:
         """获取保存文件路径"""
@@ -138,3 +146,7 @@ class ResultFrame(tk.Frame):
                         writer.writerow([key.strip(), value.strip()])
                     else:
                         writer.writerow([line.strip()])
+
+    def handle_gui_error(self, message: str, exception: Exception) -> None:
+        logger.error(f"{message}: {str(exception)}", exc_info=True)
+        raise GUIError(f"{message}: {str(exception)}")

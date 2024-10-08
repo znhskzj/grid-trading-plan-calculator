@@ -1,20 +1,23 @@
 # src/gui/components/right_frame.py
+
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
-import logging
+from typing import List, Callable, Any
+from src.utils.logger import setup_logger
 from src.utils.gui_helpers import validate_float_input, validate_int_input
+from src.utils.error_handler import GUIError
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 class RightFrame(tk.Frame):
-    def __init__(self, master, controller):
+    def __init__(self, master: tk.Widget, controller: Any):
         super().__init__(master)
         self.controller = controller
         self.initialize_variables()
         self.create_widgets()
         self.connect_controller()
 
-    def initialize_variables(self):
+    def initialize_variables(self) -> None:
         self.funds_var = tk.StringVar()
         self.initial_price_var = tk.StringVar()
         self.stop_loss_price_var = tk.StringVar()
@@ -25,18 +28,18 @@ class RightFrame(tk.Frame):
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
         self.alpha_vantage_key = tk.StringVar()
-        self.available_apis = ["yahoo", "alpha_vantage"]  # 这应该从配置或API管理器获取
+        self.available_apis: List[str] = ["yahoo", "alpha_vantage"]  # 这应该从配置或API管理器获取
         self.force_simulate = False
 
-    def create_widgets(self):
-        self.create_input_fields()
-        self.create_option_frame()
-        self.create_allocation_method_widgets()
-        self.create_buttons()
-        self.create_api_widgets()
-        self.create_moomoo_settings()
+    def create_widgets(self) -> None:
+        try:
+            self.create_input_fields()
+            self.create_option_frame()
+            self.create_buttons()
+        except Exception as e:
+            self.handle_gui_error("创建右侧框架组件时发生错误", e)
 
-    def create_input_fields(self):
+    def create_input_fields(self) -> None:
         labels = ["可用资金:", "初始价格:", "止损价格:", "网格数量:", "交易指令:"]
         vars = [self.funds_var, self.initial_price_var, self.stop_loss_price_var, self.num_grids_var, self.instruction_var]
 
@@ -45,7 +48,7 @@ class RightFrame(tk.Frame):
             entry = ttk.Entry(self, textvariable=var, width=20)
             entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
             
-            if label == "可用资金:" or label == "初始价格:" or label == "止损价格:":
+            if label in ["可用资金:", "初始价格:", "止损价格:"]:
                 entry.config(validate="key", validatecommand=(self.register(validate_float_input), '%d', '%P'))
             elif label == "网格数量:":
                 entry.config(validate="key", validatecommand=(self.register(validate_int_input), '%d', '%P'))
@@ -60,7 +63,7 @@ class RightFrame(tk.Frame):
                 entry.bind('<FocusIn>', self.on_entry_click)
                 entry.bind('<FocusOut>', self.on_focusout)
 
-    def create_option_frame(self):
+    def create_option_frame(self) -> None:
         option_frame = ttk.Frame(self)
         option_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 10))
         option_frame.grid_columnconfigure(0, weight=2)
@@ -71,7 +74,7 @@ class RightFrame(tk.Frame):
         self.create_api_widgets(option_frame)
         self.create_moomoo_settings(option_frame)
 
-    def create_allocation_method_widgets(self, parent_frame):
+    def create_allocation_method_widgets(self, parent_frame: ttk.Frame) -> None:
         allocation_frame = ttk.LabelFrame(parent_frame, text="分配方式")
         allocation_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
         
@@ -83,11 +86,11 @@ class RightFrame(tk.Frame):
             ttk.Radiobutton(allocation_frame, text=text, variable=self.allocation_method_var, value=value).grid(row=i, column=0, sticky="w")
             ttk.Label(allocation_frame, text=desc).grid(row=i, column=1, sticky="w", padx=(10, 0))
 
-    def create_buttons(self):
+    def create_buttons(self) -> None:
         button_frame = ttk.Frame(self)
         button_frame.grid(row=8, column=0, columnspan=2, pady=(10, 0), sticky='ew')
 
-        buttons = [
+        buttons: List[tuple[str, Callable[[], None]]] = [
             ("计算购买计划", self.controller.run_calculation),
             ("保留10%计算", lambda: self.controller.calculate_with_reserve(10)),
             ("保留20%计算", lambda: self.controller.calculate_with_reserve(20)),
@@ -101,7 +104,7 @@ class RightFrame(tk.Frame):
         separator = ttk.Separator(self, orient='horizontal')
         separator.grid(row=9, column=0, columnspan=2, sticky='ew', pady=5)
 
-        second_row_buttons = [
+        second_row_buttons: List[tuple[str, Callable[[], None]]] = [
             ("查询可用资金", self.controller.query_available_funds),
             ("查询持仓股票", self.controller.query_positions),
             ("按标的计划下单", self.controller.place_order_by_plan),
@@ -113,7 +116,7 @@ class RightFrame(tk.Frame):
             btn = ttk.Button(button_frame, text=text, command=command)
             btn.grid(row=1, column=i, padx=5, pady=(5, 0))
             
-    def create_api_widgets(self, parent_frame):
+    def create_api_widgets(self, parent_frame: ttk.Frame) -> None:
         api_frame = ttk.LabelFrame(parent_frame, text="API 选择")
         api_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
 
@@ -127,7 +130,7 @@ class RightFrame(tk.Frame):
             ttk.Radiobutton(api_frame, text=display_name, variable=self.api_choice, 
                             value=api, command=self.on_api_change).grid(row=i, column=0, sticky="w")
 
-    def create_moomoo_settings(self, parent_frame):
+    def create_moomoo_settings(self, parent_frame: ttk.Frame) -> None:
         moomoo_frame = ttk.LabelFrame(parent_frame, text="Moomoo设置")
         moomoo_frame.grid(row=0, column=2, sticky="nsew", padx=(5, 0), pady=5)
 
@@ -142,14 +145,14 @@ class RightFrame(tk.Frame):
         ttk.Button(moomoo_frame, text="切换强制模拟模式", command=self.toggle_force_simulate).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         self.update_moomoo_settings_state()
 
-    def update_moomoo_settings_state(self):
+    def update_moomoo_settings_state(self) -> None:
         if self.force_simulate:
             self.real_radio.config(state="disabled")
             self.trade_mode_var.set("模拟")
         else:
             self.real_radio.config(state="normal")
 
-    def on_api_change(self):
+    def on_api_change(self) -> None:
         new_api_choice = self.api_choice.get()
         if new_api_choice == 'alpha_vantage':
             self._handle_alpha_vantage_selection()
@@ -159,7 +162,7 @@ class RightFrame(tk.Frame):
         self.controller.update_status(f"已切换到 {new_api_choice} API")
         self.controller.save_user_settings()
 
-    def _handle_alpha_vantage_selection(self):
+    def _handle_alpha_vantage_selection(self) -> None:
         existing_key = self.alpha_vantage_key.get()
         if not existing_key:
             messagebox.showinfo("Alpha Vantage API 提示",
@@ -170,7 +173,7 @@ class RightFrame(tk.Frame):
             messagebox.showinfo("Alpha Vantage API", f"使用已保存的 API Key: {existing_key[:5]}...")
             self.controller.initialize_api_manager()
 
-    def prompt_for_alpha_vantage_key(self):
+    def prompt_for_alpha_vantage_key(self) -> None:
         new_key = simpledialog.askstring("Alpha Vantage API Key",
                                         "请输入您的 Alpha Vantage API Key:",
                                         initialvalue=self.alpha_vantage_key.get())
@@ -186,20 +189,24 @@ class RightFrame(tk.Frame):
         
         self.controller.update_status(f"已切换到 {self.api_choice.get()} API")
 
-    def on_entry_click(self, event):
+    def on_entry_click(self, event: tk.Event) -> None:
         if event.widget.get() == "例：SOXL现价到37.5之间分批买，压力39+，止损36.8":
             event.widget.delete(0, "end")
             event.widget.config(foreground="black")
 
-    def on_focusout(self, event):
+    def on_focusout(self, event: tk.Event) -> None:
         if event.widget.get() == "":
             event.widget.insert(0, "例：SOXL现价到37.5之间分批买，压力39+，止损36.8")
             event.widget.config(foreground="gray")
 
-    def toggle_force_simulate(self):
+    def toggle_force_simulate(self) -> None:
         self.force_simulate = not self.force_simulate
         self.update_moomoo_settings_state()
 
-    def connect_controller(self):
+    def connect_controller(self) -> None:
         # 如果有任何需要直接连接到控制器的方法，可以在这里进行
         pass
+
+    def handle_gui_error(self, message: str, exception: Exception) -> None:
+        logger.error(f"{message}: {str(exception)}", exc_info=True)
+        raise GUIError(f"{message}: {str(exception)}")
