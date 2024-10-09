@@ -13,7 +13,7 @@ class MainViewModel:
         self.stop_loss_price: float = 0.0
         self.total_investment: float = 0.0
         self.grid_levels: int = 0
-        self.allocation_method: str = ""
+        self.allocation_method: int = 0 
         self.api_choice: str = ""
         self.current_symbol: str = ""
         self.status_message: str = ""
@@ -44,7 +44,7 @@ class MainViewModel:
         """获取所有输入值"""
         try:
             return {
-                "funds": self.total_investment,
+                "funds": self.total_investment if self.total_investment > 0 else 50000,  # 添加默认值
                 "initial_price": self.current_price,
                 "stop_loss_price": self.stop_loss_price,
                 "num_grids": self.grid_levels,
@@ -86,7 +86,7 @@ class MainViewModel:
             return "总投资额必须大于0"
         if self.grid_levels <= 0:
             return "网格级别必须大于0"
-        if not self.allocation_method:
+        if self.allocation_method is None:
             return "分配方法未设置"
         return None
 
@@ -115,11 +115,10 @@ class MainViewModel:
         }
     
     def update_calculation_inputs(self, total_investment: float, grid_levels: int, allocation_method: str) -> None:
-        """更新计算相关的输入值"""
         self.total_investment = total_investment
         self.grid_levels = grid_levels
-        self.allocation_method = allocation_method
-        logger.info(f"更新计算输入: 总投资={total_investment}, 网格数量={grid_levels}, 分配方法={allocation_method}")
+        self.allocation_method = int(allocation_method)  # 确保转换为整数
+        logger.info(f"更新计算输入: 总投资={total_investment}, 网格数量={grid_levels}, 分配方法={self.allocation_method}")
 
     def bulk_update(self, data: Dict[str, Any]) -> None:
         """批量更新多个字段"""

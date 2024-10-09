@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
-from typing import List, Callable, Any
+from typing import List, Callable, Any, Dict
 from src.utils.logger import setup_logger
 from src.utils.gui_helpers import validate_float_input, validate_int_input
 from src.utils.error_handler import GUIError
@@ -15,7 +15,7 @@ class RightFrame(tk.Frame):
         self.controller = controller
         self.initialize_variables()
         self.create_widgets()
-        self.connect_controller()
+        self.allocation_method_var = tk.StringVar(value="0")
 
     def initialize_variables(self) -> None:
         self.funds_var = tk.StringVar()
@@ -28,14 +28,25 @@ class RightFrame(tk.Frame):
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
         self.alpha_vantage_key = tk.StringVar()
-        self.available_apis: List[str] = ["yahoo", "alpha_vantage"]  # 这应该从配置或API管理器获取
         self.force_simulate = False
+        self.available_apis = self.controller.config_manager.get_config('AvailableAPIs', {}).get('apis', '').split(',')
+        if not self.available_apis:
+            self.available_apis = ["yahoo", "alpha_vantage"] 
+
+        # 加载默认配置
+        default_config = self.controller.config_manager.get_config('RecentCalculations', {})
+        self.funds_var.set(default_config.get('funds', ''))
+        self.initial_price_var.set(default_config.get('initial_price', ''))
+        self.stop_loss_price_var.set(default_config.get('stop_loss_price', ''))
+        self.num_grids_var.set(default_config.get('num_grids', ''))
 
     def create_widgets(self) -> None:
         try:
             self.create_input_fields()
             self.create_option_frame()
             self.create_buttons()
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_columnconfigure(1, weight=1)
         except Exception as e:
             self.handle_gui_error("创建右侧框架组件时发生错误", e)
 
@@ -63,6 +74,13 @@ class RightFrame(tk.Frame):
                 entry.bind('<FocusIn>', self.on_entry_click)
                 entry.bind('<FocusOut>', self.on_focusout)
 
+        # 设置默认值
+        default_config = self.controller.config_manager.get_config('RecentCalculations', {})
+        self.funds_var.set(default_config.get('funds', ''))
+        self.initial_price_var.set(default_config.get('initial_price', ''))
+        self.stop_loss_price_var.set(default_config.get('stop_loss_price', ''))
+        self.num_grids_var.set(default_config.get('num_grids', ''))
+
     def create_option_frame(self) -> None:
         option_frame = ttk.Frame(self)
         option_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(10, 10))
@@ -83,12 +101,14 @@ class RightFrame(tk.Frame):
                    ("线性加权", "2", "线性增长分配")]
 
         for i, (text, value, desc) in enumerate(methods):
-            ttk.Radiobutton(allocation_frame, text=text, variable=self.allocation_method_var, value=value).grid(row=i, column=0, sticky="w")
+            ttk.Radiobutton(allocation_frame, text=text, variable=self.allocation_method_var, value=value,
+                            command=self.on_allocation_method_change).grid(row=i, column=0, sticky="w")
             ttk.Label(allocation_frame, text=desc).grid(row=i, column=1, sticky="w", padx=(10, 0))
 
     def create_buttons(self) -> None:
         button_frame = ttk.Frame(self)
         button_frame.grid(row=8, column=0, columnspan=2, pady=(10, 0), sticky='ew')
+        button_frame.grid_columnconfigure(tuple(range(5)), weight=1)
 
         buttons: List[tuple[str, Callable[[], None]]] = [
             ("计算购买计划", self.controller.run_calculation),
@@ -99,7 +119,7 @@ class RightFrame(tk.Frame):
         ]
 
         for i, (text, command) in enumerate(buttons):
-            ttk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=5, pady=(0, 5))
+            ttk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=2, pady=(0, 5), sticky='ew')
 
         separator = ttk.Separator(self, orient='horizontal')
         separator.grid(row=9, column=0, columnspan=2, sticky='ew', pady=5)
@@ -114,8 +134,8 @@ class RightFrame(tk.Frame):
 
         for i, (text, command) in enumerate(second_row_buttons):
             btn = ttk.Button(button_frame, text=text, command=command)
-            btn.grid(row=1, column=i, padx=5, pady=(5, 0))
-            
+            btn.grid(row=1, column=i, padx=2, pady=(5, 0), sticky='ew')
+
     def create_api_widgets(self, parent_frame: ttk.Frame) -> None:
         api_frame = ttk.LabelFrame(parent_frame, text="API 选择")
         api_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
@@ -210,3 +230,30 @@ class RightFrame(tk.Frame):
     def handle_gui_error(self, message: str, exception: Exception) -> None:
         logger.error(f"{message}: {str(exception)}", exc_info=True)
         raise GUIError(f"{message}: {str(exception)}")
+    
+    def update_fields(self, values: Dict[str, Any]) -> None:
+        for field, value in values.items():
+            if hasattr(self, f"{field}_var"):
+                getattr(self, f"{field}_var").set(str(value))
+
+    def set_initial_values(self, funds, initial_price, stop_loss_price, num_grids, allocation_method):
+        self.funds_var.set(funds)
+        self.initial_price_var.set(initial_price)
+        self.stop_loss_price_var.set(stop_loss_price)
+        self.num_grids_var.set(num_grids)
+        self.allocation_method_var.set(allocation_method)
+        
+        # 更新 ViewModel
+        self.controller.viewmodel.update_calculation_inputs(
+            total_investment=float(funds),
+            grid_levels=int(num_grids),
+            allocation_method=allocation_method
+        )
+
+    def on_allocation_method_change(self):
+        # 当分配方法改变时更新 ViewModel
+        self.controller.viewmodel.update_calculation_inputs(
+            total_investment=float(self.funds_var.get()),
+            grid_levels=int(self.num_grids_var.get()),
+            allocation_method=self.allocation_method_var.get()
+        )

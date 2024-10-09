@@ -21,15 +21,17 @@ class ResultFrame(tk.Frame):
     def create_widgets(self) -> None:
         try:
             self.create_result_text()
+            self.grid_columnconfigure(0, weight=1)
+            self.grid_rowconfigure(0, weight=1)
         except Exception as e:
             self.handle_gui_error("创建结果框架组件时发生错误", e)
 
     def create_result_text(self) -> None:
         self.result_text = tk.Text(self, wrap=tk.WORD, height=20, width=80)
-        self.result_text.pack(expand=True, fill=tk.BOTH)
+        self.result_text.grid(row=0, column=0, sticky="nsew")
         
         scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.result_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar.grid(row=0, column=1, sticky="ns")
         self.result_text.configure(yscrollcommand=scrollbar.set)
     
     def display_results(self, result: str) -> None:

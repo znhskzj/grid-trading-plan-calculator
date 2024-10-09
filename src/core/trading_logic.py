@@ -10,9 +10,9 @@ from src.config.config_manager import ConfigManager
 logger = setup_logger('trading_logic')
 
 class TradingLogic:
-    def __init__(self):
-        self.config_manager: ConfigManager = ConfigManager()
-        self.trading_config: Dict[str, Any] = self.config_manager.get_trading_config()
+    def __init__(self, config_manager: ConfigManager):
+        self.config_manager = config_manager
+        self.trading_config = self.config_manager.get_trading_config()
 
     def validate_inputs(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> None:
         """
@@ -53,14 +53,16 @@ class TradingLogic:
         :param allocation_method: 分配方式
         :return: 购买计划列表和警告信息
         """
+
         logger.info("开始执行 calculate_buy_plan 函数")
+        logger.debug(f"输入参数: funds={funds}, initial_price={initial_price}, stop_loss_price={stop_loss_price}, num_grids={num_grids}, allocation_method={allocation_method}")
         
         # 使用 trading_config 中的默认值
         funds = funds or float(self.trading_config.get('default_funds', 50000.0))
         initial_price = initial_price or float(self.trading_config.get('default_initial_price', 50.0))
         stop_loss_price = stop_loss_price or float(self.trading_config.get('default_stop_loss_price', 30.0))
         num_grids = num_grids or int(self.trading_config.get('default_num_grids', 10))
-        allocation_method = allocation_method or int(self.trading_config.get('default_allocation_method', 1))
+        allocation_method = int(allocation_method) or int(self.trading_config.get('default_allocation_method', 1))
 
         try:
             self.validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)

@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 class MainController:
     def __init__(self, main_window):
         self.main_window = main_window
-        self.viewmodel = MainViewModel()
-        self.trading_logic = TradingLogic()
         self.config_manager = ConfigManager()
+        self.viewmodel = MainViewModel()
+        self.viewmodel.api_choice = self.config_manager.get_config('API', {}).get('choice', 'yahoo')
+        self.trading_logic = TradingLogic(self.config_manager)
         self.api_manager = APIManager()
         self.moomoo_api = self.api_manager.trading_api  # 使用 APIManager 中的 MoomooAdapter 实例
         self.current_acc_id = None
@@ -29,6 +30,16 @@ class MainController:
         self.last_connected_env = None
         self.last_connected_market = None
         self.force_simulate = False
+
+        # 加载默认配置
+        default_config = self.config_manager.get_config('RecentCalculations', {})
+        
+        # 使用默认配置更新 ViewModel
+        self.viewmodel.update_calculation_inputs(
+            total_investment=float(default_config.get('funds', 50000)),
+            grid_levels=int(default_config.get('num_grids', 10)),
+            allocation_method=default_config.get('allocation_method', '0')
+        )
 
     def get_current_account(self):
         self.trade_env = TrdEnv.REAL if self.viewmodel.trade_mode == "真实" else TrdEnv.SIMULATE
@@ -110,7 +121,13 @@ class MainController:
         try:
             self._validate_inputs()
             input_values = self.viewmodel.get_input_values()
-            
+            logger.debug(f"计算使用的输入值: {input_values}")
+            logger.debug(f"分配方法类型: {type(input_values['allocation_method'])}, 值: {input_values['allocation_method']}")
+        
+            if not self.viewmodel.current_symbol:
+                logger.warning("股票代码未设置，使用默认值进行计算")
+                self.viewmodel.update_stock_symbol("DEFAULT")
+
             result = self._prepare_result_header()
             buy_plan, warning_message = self.trading_logic.calculate_buy_plan(**input_values)
             
@@ -121,10 +138,54 @@ class MainController:
             self.viewmodel.update_status("计算完成")
             
             logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol}")
-        except (InputValidationError, TradingLogicError) as e:
+        except InputValidationError as e:
+            # 修改：如果是股票代码未设置，我们仍然进行计算
+            if str(e) == "股票代码未设置":
+                logger.warning("股票代码未设置，仍继续计算")
+                self._calculate_without_stock()
+            else:
+                self._handle_calculation_error(str(e))
+        except TradingLogicError as e:
             self._handle_calculation_error(str(e))
         except Exception as e:
             self._handle_calculation_error(f"计算过程中发生未知错误: {str(e)}")
+            
+    def calculate_with_reserve(self, reserve_percentage: int) -> None:
+        """执行保留部分资金的计算"""
+        logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
+        self.viewmodel.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
+        
+        try:
+            self._validate_inputs()
+            input_values = self.viewmodel.get_input_values()
+            
+            result = self._prepare_result_header(with_reserve=True, reserve_percentage=reserve_percentage)
+            buy_plan, warning_message, reserved_funds = self.trading_logic.calculate_with_reserve(input_values, reserve_percentage)
+            
+            calculation_result = self._format_buy_plan(buy_plan, warning_message, reserved_funds)
+            result += calculation_result
+            
+            self.viewmodel.display_results(result)
+            self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金）")
+            
+            logger.debug(f"计算完成（保留{reserve_percentage}%资金），当前股票代码: {self.viewmodel.current_symbol}")
+        except InputValidationError as e:
+            self._handle_calculation_error(str(e))
+        except TradingLogicError as e:
+            self._handle_calculation_error(str(e))
+        except Exception as e:
+            self._handle_calculation_error(f"计算过程中发生未知错误: {str(e)}")
+
+    def _calculate_without_stock(self):
+        """在没有设置股票代码的情况下进行计算"""
+        input_values = self.viewmodel.get_input_values()
+        result = "注意：未设置股票代码，使用当前输入值进行计算\n\n"
+        result += self._prepare_result_header()
+        buy_plan, warning_message = self.trading_logic.calculate_buy_plan(**input_values)
+        calculation_result = self._format_buy_plan(buy_plan, warning_message)
+        result += calculation_result
+        self.viewmodel.display_results(result)
+        self.viewmodel.update_status("计算完成（无股票代码）")
     
     def _validate_inputs(self) -> None:
         """验证输入值"""
@@ -151,7 +212,6 @@ class MainController:
         return result
 
     def set_stock_price(self, symbol: str) -> None:
-        """设置股票价格"""
         logger.info(f"设置股票价格，标的: {symbol}")
         if self.viewmodel.api_choice != self.api_manager.current_price_api:
             self._initialize_api_manager()
@@ -162,14 +222,18 @@ class MainController:
             
             self.viewmodel.display_results(f"已更新股票 {symbol} 的价格：{current_price:.2f}")
             
-            self.main_window.check_widget_visibility()
+            # 确保更新 UI
+            self.main_window.right_frame.update_fields({
+                'initial_price': current_price,
+                'stop_loss_price': current_price * 0.9
+            })
+            
         except APIError as e:
             self._handle_api_error(str(e), symbol)
         except Exception as e:
             self._handle_api_error(f"获取股票价格时发生未知错误: {str(e)}", symbol)
 
     def _update_price_fields(self, symbol: str, current_price: float, api_used: str) -> None:
-        """更新价格相关字段"""
         if not current_price:
             raise APIError(f"无法从 {api_used} 获取有效的价格数据")
             
@@ -395,4 +459,23 @@ class MainController:
         self.viewmodel.display_results(message)
         self.main_window.show_info("实时通知", message)
 
-    
+    def process_trading_instruction(self, instruction: str) -> None:
+        """处理交易指令"""
+        try:
+            current_price = self.api_manager.get_stock_price(self.viewmodel.current_symbol)[0] if self.viewmodel.current_symbol else None
+            processed_instruction = self.trading_logic.process_instruction(instruction, current_price)
+            self._update_viewmodel_from_instruction(processed_instruction)
+            self.run_calculation()
+        except TradingLogicError as e:
+            self._handle_calculation_error(str(e))
+        except Exception as e:
+            self._handle_calculation_error(f"处理交易指令时发生错误: {str(e)}")
+
+    def _update_viewmodel_from_instruction(self, processed_instruction: Dict[str, Any]) -> None:
+        """根据处理后的指令更新 ViewModel"""
+        self.viewmodel.update_from_instruction(processed_instruction)
+
+    def initialize_api_manager(self, api_choice: str, api_key: str = '') -> None:
+        self.api_manager.switch_price_api(api_choice)
+        if api_choice == 'alpha_vantage':
+            self.api_manager.set_alpha_vantage_key(api_key)
