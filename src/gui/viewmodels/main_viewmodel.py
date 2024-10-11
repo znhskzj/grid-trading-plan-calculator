@@ -146,3 +146,16 @@ class MainViewModel:
         """更新交易市场"""
         self.market = market
         logger.info(f"交易市场更新为: {market}")
+
+    def update_input_values(self, input_values: Dict[str, Any]) -> None:
+        """从 GUI 获取并更新最新的输入值"""
+        try:
+            self.total_investment = float(input_values.get('funds', 0))
+            self.current_price = float(input_values.get('initial_price', 0))
+            self.stop_loss_price = float(input_values.get('stop_loss_price', 0))
+            self.grid_levels = int(input_values.get('num_grids', 0))
+            self.allocation_method = int(input_values.get('allocation_method', 0))
+            logger.info("输入值已从 GUI 更新")
+        except ValueError as e:
+            logger.error(f"更新输入值时发生错误: {str(e)}")
+            raise InputValidationError("请确保所有输入字段都包含有效的数值")

@@ -15,7 +15,7 @@ class RightFrame(tk.Frame):
         self.controller = controller
         self.initialize_variables()
         self.create_widgets()
-        self.allocation_method_var = tk.StringVar(value="0")
+        self.set_default_allocation_method()
 
     def initialize_variables(self) -> None:
         self.funds_var = tk.StringVar()
@@ -23,7 +23,7 @@ class RightFrame(tk.Frame):
         self.stop_loss_price_var = tk.StringVar()
         self.num_grids_var = tk.StringVar()
         self.instruction_var = tk.StringVar()
-        self.allocation_method_var = tk.StringVar(value="0")
+        self.allocation_method_var = tk.StringVar()
         self.api_choice = tk.StringVar(value="yahoo")
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
@@ -39,6 +39,10 @@ class RightFrame(tk.Frame):
         self.initial_price_var.set(default_config.get('initial_price', ''))
         self.stop_loss_price_var.set(default_config.get('stop_loss_price', ''))
         self.num_grids_var.set(default_config.get('num_grids', ''))
+
+    def set_default_allocation_method(self) -> None:
+        default_method = self.controller.config_manager.get_config('General', {}).get('allocation_method', '1')
+        self.allocation_method_var.set(default_method)
 
     def create_widgets(self) -> None:
         try:
@@ -63,6 +67,7 @@ class RightFrame(tk.Frame):
                 entry.config(validate="key", validatecommand=(self.register(validate_float_input), '%d', '%P'))
             elif label == "网格数量:":
                 entry.config(validate="key", validatecommand=(self.register(validate_int_input), '%d', '%P'))
+                var.trace_add("write", self.on_num_grids_change)
             
             if label == "交易指令:":
                 entry.config(width=50)
@@ -111,7 +116,7 @@ class RightFrame(tk.Frame):
         button_frame.grid_columnconfigure(tuple(range(5)), weight=1)
 
         buttons: List[tuple[str, Callable[[], None]]] = [
-            ("计算购买计划", self.controller.run_calculation),
+            ("计算购买计划", self.run_calculation_with_check),
             ("保留10%计算", lambda: self.controller.calculate_with_reserve(10)),
             ("保留20%计算", lambda: self.controller.calculate_with_reserve(20)),
             ("保存为CSV", self.controller.save_to_csv),
@@ -119,7 +124,9 @@ class RightFrame(tk.Frame):
         ]
 
         for i, (text, command) in enumerate(buttons):
-            ttk.Button(button_frame, text=text, command=command).grid(row=0, column=i, padx=2, pady=(0, 5), sticky='ew')
+            btn = ttk.Button(button_frame, text=text, command=command)
+            btn.grid(row=0, column=i, padx=2, pady=(0, 5), sticky='ew')
+            logger.debug(f"Created first row button: {text}")
 
         separator = ttk.Separator(self, orient='horizontal')
         separator.grid(row=9, column=0, columnspan=2, sticky='ew', pady=5)
@@ -135,6 +142,24 @@ class RightFrame(tk.Frame):
         for i, (text, command) in enumerate(second_row_buttons):
             btn = ttk.Button(button_frame, text=text, command=command)
             btn.grid(row=1, column=i, padx=2, pady=(5, 0), sticky='ew')
+            logger.debug(f"Created second row button: {text}")
+
+    def get_all_input_values(self) -> Dict[str, Any]:
+        return {
+            'funds': self.funds_var.get(),
+            'initial_price': self.initial_price_var.get(),
+            'stop_loss_price': self.stop_loss_price_var.get(),
+            'num_grids': self.num_grids_var.get(),
+            'allocation_method': self.allocation_method_var.get()
+        }
+
+    def run_calculation_with_check(self) -> None:
+        if not self.allocation_method_var.get():
+            messagebox.showwarning("警告", "请选择一个分配方式后再进行计算。")
+            return
+        input_values = self.get_all_input_values()
+        self.controller.viewmodel.update_input_values(input_values)
+        self.controller.run_calculation()
 
     def create_api_widgets(self, parent_frame: ttk.Frame) -> None:
         api_frame = ttk.LabelFrame(parent_frame, text="API 选择")
@@ -257,3 +282,13 @@ class RightFrame(tk.Frame):
             grid_levels=int(self.num_grids_var.get()),
             allocation_method=self.allocation_method_var.get()
         )
+        # 保存用户选择的分配方式到配置文件
+        self.controller.config_manager.set_config('General', 'allocation_method', self.allocation_method_var.get())
+        self.controller.config_manager.save_config()
+
+    def on_num_grids_change(self, *args):
+        try:
+            num_grids = int(self.num_grids_var.get())
+            self.controller.viewmodel.update_calculation_inputs(grid_levels=num_grids)
+        except ValueError:
+            pass  # 忽略无效输入

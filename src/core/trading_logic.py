@@ -42,7 +42,7 @@ class TradingLogic:
         if num_grids > 100:
             raise TradingLogicError("网格数量不能超过100")
 
-    def calculate_buy_plan(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> Tuple[List[Tuple[float, int]], str]:
+    def calculate_buy_plan(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> Tuple[List[Tuple[float, int]], str, Dict[str, Any]]:
         """
         计算购买计划
         
@@ -53,10 +53,9 @@ class TradingLogic:
         :param allocation_method: 分配方式
         :return: 购买计划列表和警告信息
         """
-
         logger.info("开始执行 calculate_buy_plan 函数")
         logger.debug(f"输入参数: funds={funds}, initial_price={initial_price}, stop_loss_price={stop_loss_price}, num_grids={num_grids}, allocation_method={allocation_method}")
-        
+
         # 使用 trading_config 中的默认值
         funds = funds or float(self.trading_config.get('default_funds', 50000.0))
         initial_price = initial_price or float(self.trading_config.get('default_initial_price', 50.0))
@@ -68,7 +67,7 @@ class TradingLogic:
             self.validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)
         except TradingLogicError as e:
             logger.error(f"输入验证失败: {str(e)}")
-            return [], str(e)
+            return [], str(e), {}
 
         max_price: float = initial_price
         min_price: float = stop_loss_price
@@ -83,11 +82,7 @@ class TradingLogic:
         buy_prices: np.ndarray = np.linspace(max_price, min_price, num_grids)
         logger.debug(f"生成的价格网格: {buy_prices}")
 
-        if allocation_method == 0:  # 等金额分配
-            target_amount_per_grid: float = funds / num_grids
-            buy_quantities: List[int] = [max(1, int(target_amount_per_grid / price)) for price in buy_prices]
-        else:
-            buy_quantities: List[int] = self.calculate_weights(buy_prices.tolist(), allocation_method, max_shares)
+        buy_quantities: List[int] = self.calculate_weights(buy_prices.tolist(), allocation_method, max_shares)
 
         total_cost: float = sum(price * quantity for price, quantity in zip(buy_prices, buy_quantities))
         if total_cost > funds:
@@ -109,8 +104,24 @@ class TradingLogic:
         if single_share_count > num_grids // 2:
             warning_message = "\n警告：当前参数可能不够合理，多个价位只购买1股。建议减少网格数量或增加总资金。"
 
+        # 计算总结信息
+        total_shares = sum(quantity for _, quantity in buy_plan)
+        total_cost = sum(price * quantity for price, quantity in buy_plan)
+        average_price = total_cost / total_shares if total_shares > 0 else 0
+        max_loss = total_cost - (total_shares * stop_loss_price)
+        max_loss_percentage = (max_loss / total_cost) * 100 if total_cost > 0 else 0
+
+        summary = {
+            "total_shares": total_shares,
+            "total_cost": total_cost,
+            "average_price": average_price,
+            "max_loss": max_loss,
+            "max_loss_percentage": max_loss_percentage,
+            "allocation_method": ["等金额分配", "等比例分配", "线性加权分配"][allocation_method],
+        }
+
         logger.info("calculate_buy_plan 函数执行完毕")
-        return buy_plan, warning_message
+        return buy_plan, warning_message, summary
         
     def save_recent_calculation(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int) -> None:
         """
@@ -158,7 +169,7 @@ class TradingLogic:
 
         logger.debug(f"计算得到的初始股数: {initial_shares}")
         return initial_shares
-
+        
     def equal_amount_allocation(self, num_prices: int) -> List[float]:
         """
         等金额分配方法
@@ -191,13 +202,13 @@ class TradingLogic:
         """
         return list(range(1, num_prices + 1))
 
-    def calculate_with_reserve(self, input_values: Dict[str, Any], reserve_percentage: int) -> Tuple[List[Tuple[float, int]], str, float]:
+    def calculate_with_reserve(self, input_values: Dict[str, Any], reserve_percentage: int) -> Tuple[List[Tuple[float, int]], str, float, Dict[str, Any]]:
         """
         执行保留部分资金的计算
         
         :param input_values: 输入值字典
         :param reserve_percentage: 保留资金百分比
-        :return: 购买计划、警告信息和保留资金
+        :return: 购买计划、警告信息、保留资金和总结信息
         """
         logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
         
@@ -207,9 +218,13 @@ class TradingLogic:
         
         input_values['funds'] = available_funds
         
-        buy_plan, warning_message = self.calculate_buy_plan(**input_values)
+        # 添加额外的验证
+        if input_values['initial_price'] <= 0:
+            raise TradingLogicError("当前价格必须大于0")
         
-        return buy_plan, warning_message, reserved_funds
+        buy_plan, warning_message, summary = self.calculate_buy_plan(**input_values)
+        
+        return buy_plan, warning_message, reserved_funds, summary
 
     def parse_trading_instruction(self, instruction: str, current_api_price: Optional[float] = None) -> Dict[str, Union[str, float, Tuple[float, float], None]]:
         """

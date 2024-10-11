@@ -17,14 +17,16 @@ class ResultFrame(tk.Frame):
         super().__init__(master)
         self.controller = controller
         self.create_widgets()
+        self.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
-    def create_widgets(self) -> None:
-        try:
-            self.create_result_text()
-            self.grid_columnconfigure(0, weight=1)
-            self.grid_rowconfigure(0, weight=1)
-        except Exception as e:
-            self.handle_gui_error("创建结果框架组件时发生错误", e)
+    def create_widgets(self):
+        self.result_text = tk.Text(self, wrap=tk.WORD, height=15)
+        self.result_text.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.result_text.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.result_text.configure(yscrollcommand=scrollbar.set)
 
     def create_result_text(self) -> None:
         self.result_text = tk.Text(self, wrap=tk.WORD, height=20, width=80)

@@ -114,41 +114,29 @@ class MainController:
             logger.error(f"Moomoo 连接测试错误: {str(e)}")
     
     def run_calculation(self) -> None:
-        """执行购买计划计算"""
         logger.info("开始运行计算...")
         self.viewmodel.update_status("开始计算购买计划...")
         
         try:
-            self._validate_inputs()
             input_values = self.viewmodel.get_input_values()
             logger.debug(f"计算使用的输入值: {input_values}")
-            logger.debug(f"分配方法类型: {type(input_values['allocation_method'])}, 值: {input_values['allocation_method']}")
         
             if not self.viewmodel.current_symbol:
                 logger.warning("股票代码未设置，使用默认值进行计算")
                 self.viewmodel.update_stock_symbol("DEFAULT")
 
             result = self._prepare_result_header()
-            buy_plan, warning_message = self.trading_logic.calculate_buy_plan(**input_values)
+            buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
             
-            calculation_result = self._format_buy_plan(buy_plan, warning_message)
+            calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
             result += calculation_result
             
-            self.viewmodel.display_results(result)
+            self.display_results(result)
             self.viewmodel.update_status("计算完成")
             
             logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol}")
-        except InputValidationError as e:
-            # 修改：如果是股票代码未设置，我们仍然进行计算
-            if str(e) == "股票代码未设置":
-                logger.warning("股票代码未设置，仍继续计算")
-                self._calculate_without_stock()
-            else:
-                self._handle_calculation_error(str(e))
-        except TradingLogicError as e:
-            self._handle_calculation_error(str(e))
         except Exception as e:
-            self._handle_calculation_error(f"计算过程中发生未知错误: {str(e)}")
+            self._handle_calculation_error(f"计算过程中发生错误: {str(e)}")
             
     def calculate_with_reserve(self, reserve_percentage: int) -> None:
         """执行保留部分资金的计算"""
@@ -156,13 +144,14 @@ class MainController:
         self.viewmodel.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
         
         try:
+            self.viewmodel.update_input_values(self.view)
             self._validate_inputs()
             input_values = self.viewmodel.get_input_values()
             
             result = self._prepare_result_header(with_reserve=True, reserve_percentage=reserve_percentage)
-            buy_plan, warning_message, reserved_funds = self.trading_logic.calculate_with_reserve(input_values, reserve_percentage)
+            buy_plan, warning_message, reserved_funds, summary = self.trading_logic.calculate_with_reserve(input_values, reserve_percentage)
             
-            calculation_result = self._format_buy_plan(buy_plan, warning_message, reserved_funds)
+            calculation_result = self._format_buy_plan(buy_plan, warning_message, summary, reserved_funds)
             result += calculation_result
             
             self.viewmodel.display_results(result)
@@ -181,8 +170,8 @@ class MainController:
         input_values = self.viewmodel.get_input_values()
         result = "注意：未设置股票代码，使用当前输入值进行计算\n\n"
         result += self._prepare_result_header()
-        buy_plan, warning_message = self.trading_logic.calculate_buy_plan(**input_values)
-        calculation_result = self._format_buy_plan(buy_plan, warning_message)
+        buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
+        calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
         result += calculation_result
         self.viewmodel.display_results(result)
         self.viewmodel.update_status("计算完成（无股票代码）")
@@ -266,7 +255,7 @@ class MainController:
         """初始化API管理器"""
         self.api_manager.switch_price_api(self.viewmodel.api_choice)
 
-    def _format_buy_plan(self, buy_plan: List[Tuple[float, int]], warning_message: str) -> str:
+    def _format_buy_plan(self, buy_plan: List[Tuple[float, int]], warning_message: str, summary: Dict[str, Any], reserved_funds: float = 0) -> str:
         """格式化购买计划结果"""
         result = ""
         if warning_message:
@@ -274,6 +263,17 @@ class MainController:
         result += "购买计划如下：\n"
         for price, quantity in buy_plan:
             result += f"价格: {price:.2f}, 数量: {quantity}\n"
+        
+        result += f"\n总购买股数: {summary['total_shares']}\n"
+        result += f"总投资成本: {summary['total_cost']:.2f}\n"
+        result += f"平均购买价格: {summary['average_price']:.2f}\n"
+        result += f"最大潜在亏损: {summary['max_loss']:.2f}\n"
+        result += f"最大亏损比例: {summary['max_loss_percentage']:.2f}%\n"
+        result += f"选择的分配方式: {summary['allocation_method']}\n"
+        
+        if reserved_funds > 0:
+            result += f"\n保留资金: {reserved_funds:.2f}\n"
+        
         return result
 
     def _handle_calculation_error(self, error_message: str) -> None:
@@ -326,17 +326,22 @@ class MainController:
         self.main_window.update_status_bar(message)
 
     def display_results(self, result: str) -> None:
-        """显示结果"""
         logger.debug(f"Input result to display_results: {result}")
         
         def update_result_text():
-            if not hasattr(self.main_window, 'result_text'):
-                logger.error("result_text widget not found")
+            if not hasattr(self.main_window, 'result_frame'):
+                logger.error("result_frame not found in main_window")
                 return
             
-            result_text = self.main_window.result_text
+            result_text = self.main_window.result_frame.result_text
+            if not result_text:
+                logger.error("result_text widget not found in result_frame")
+                return
+        
+            result_text.config(state=tk.NORMAL)
             result_text.delete(1.0, tk.END)
             result_text.insert(tk.END, result)
+            result_text.config(state=tk.DISABLED)
             result_text.see("1.0")  # 滚动到顶部
             
             self.main_window.result_frame.update()
@@ -344,7 +349,6 @@ class MainController:
             self.main_window.master.update_idletasks()
             
             logger.debug("Results displayed in result_text widget")
-            self.main_window.check_widget_visibility()
 
         self.main_window.master.after(0, update_result_text)
         

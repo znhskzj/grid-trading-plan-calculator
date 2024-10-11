@@ -28,24 +28,24 @@ class MainWindow:
         self.setup_window_properties()
         self.create_widgets()
         self.setup_layout()
-        
-        # 更新常用标的
+        self.load_initial_data()   
+     
+    def load_initial_data(self):
         common_stocks = self.config_manager.get_config('CommonStocks', {})
         self.left_frame.update_common_stocks(common_stocks)
-        
-        # 确保所有组件都已更新
-        self.master.update_idletasks()
-        
-        # 添加一个小延迟来检查可见性
-        self.master.after(100, self.check_widget_visibility)
+
         default_config = self.config_manager.get_config('RecentCalculations', {})
+        allocation_method = self.config_manager.get_config('General', {}).get('allocation_method', '0')
         self.right_frame.set_initial_values(
             funds=default_config.get('funds', '50000'),
             initial_price=default_config.get('initial_price', '100'),
             stop_loss_price=default_config.get('stop_loss_price', '90'),
             num_grids=default_config.get('num_grids', '10'),
-            allocation_method=default_config.get('allocation_method', '0')
+            allocation_method=allocation_method
         )
+
+        self.master.update_idletasks()
+        self.master.after(100, self.check_widget_visibility)
     
     def setup_window_properties(self) -> None:
         """设置窗口属性"""
@@ -70,7 +70,6 @@ class MainWindow:
     def create_widgets(self) -> None:
         """创建所有窗口组件"""
         self.create_main_frame()
-        self.create_status_bar()
         self.create_left_frame()
         self.create_right_frame()
         self.create_result_frame()
@@ -98,6 +97,7 @@ class MainWindow:
     def create_result_frame(self) -> None:
         self.result_frame = ResultFrame(self.main_frame, self.controller)
         self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        self.main_frame.grid_rowconfigure(1, weight=1)
         logger.debug("结果框架创建完成")
     
     def create_status_bar(self) -> None:
@@ -111,13 +111,15 @@ class MainWindow:
         self.main_frame.grid_columnconfigure(1, weight=3)
         self.main_frame.grid_rowconfigure(0, weight=3)
         self.main_frame.grid_rowconfigure(1, weight=1)
-        
-        self.master.grid_rowconfigure(2, weight=1) 
+
+        self.master.grid_rowconfigure(0, weight=1)
         self.master.grid_columnconfigure(0, weight=1)
-        
-        self.result_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5) 
-        self.master.after(100, self.check_widget_visibility)
-        
+
+        self.left_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        self.result_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        self.status_bar.grid(row=2, column=0, columnspan=2, sticky="ew")
+
         logger.info("布局设置完成")
     
     def setup_grid_config(self) -> None:

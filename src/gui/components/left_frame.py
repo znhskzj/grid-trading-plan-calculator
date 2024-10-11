@@ -4,6 +4,7 @@ import tkinter as tk
 import logging
 from typing import Dict, Any
 from tkinter import ttk
+from configparser import ConfigParser
 from src.utils.error_handler import GUIError
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,22 @@ class LeftFrame(tk.Frame):
         super().__init__(master)
         self.controller = controller
         self.create_widgets()
+        self.load_and_display_stocks()
     
+    def load_and_display_stocks(self):
+        stocks = self.load_stocks_from_config()
+        self.update_common_stocks(stocks)
+
+    def load_stocks_from_config(self):
+        config = ConfigParser()
+        config.read(['config.ini', 'userconfig.ini'])
+        stocks = {}
+        if 'DefaultCommonStocks' in config:
+            stocks.update(dict(config['DefaultCommonStocks']))
+        if 'CommonStocks' in config:
+            stocks.update(dict(config['CommonStocks']))
+        return stocks
+
     def create_widgets(self) -> None:
         """创建并布局所有GUI组件"""
         try:
@@ -25,7 +41,7 @@ class LeftFrame(tk.Frame):
     def create_common_stocks_frame(self) -> None:
         self.common_stocks_frame = ttk.Frame(self)
         self.common_stocks_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
-        self.common_stocks_frame.grid_remove()  # 初始时隐藏
+        # self.common_stocks_frame.grid_remove()  # 初始时隐藏
     
     def create_common_stocks_button(self) -> None:
         self.common_stocks_button = ttk.Button(self, text="常用标的", command=self.toggle_common_stocks)
@@ -33,13 +49,14 @@ class LeftFrame(tk.Frame):
     
     def toggle_common_stocks(self) -> None:
         """切换常用标的的显示状态"""
-        if self.common_stocks_frame.winfo_viewable():
-            self.common_stocks_frame.grid_remove()
-            self.common_stocks_button.config(text="常用标的")
-        else:
-            self.common_stocks_frame.grid()
-            self.common_stocks_button.config(text="隐藏标的")
-        logger.debug("切换了常用标的的可见性")
+        if hasattr(self, 'common_stocks_frame'):
+            if self.common_stocks_frame.winfo_viewable():
+                self.common_stocks_frame.grid_remove()
+                self.common_stocks_button.config(text="常用标的")
+            else:
+                self.common_stocks_frame.grid()
+                self.common_stocks_button.config(text="隐藏标的")
+            logger.debug("切换了常用标的的可见性")
 
     def update_common_stocks(self, stocks: Dict[str, str]) -> None:
         """更新常用股票列表"""
@@ -50,14 +67,16 @@ class LeftFrame(tk.Frame):
             for i, (key, symbol) in enumerate(stocks.items()):
                 if symbol and symbol.strip():
                     btn = ttk.Button(self.common_stocks_frame, text=symbol.strip(), width=10,
-                                     command=lambda s=symbol.strip(): self.controller.set_stock_price(s))
+                                    command=lambda s=symbol.strip(): self.controller.set_stock_price(s))
                     btn.grid(row=i, column=0, pady=2)
             
             # 确保常用标的按钮显示正确的文本
             if self.common_stocks_frame.winfo_children():
                 self.common_stocks_button.config(text="隐藏标的")
+                self.common_stocks_frame.grid()  # Ensure the frame is visible
             else:
                 self.common_stocks_button.config(text="显示标的")
+                self.common_stocks_frame.grid_remove()  # Hide if no stocks
             logger.info(f"更新了常用标的: {stocks}")
         except Exception as e:
             self.handle_gui_error("更新常用标的时发生错误", e)
