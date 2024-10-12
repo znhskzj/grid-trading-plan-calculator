@@ -26,7 +26,7 @@ APP_NAME = os.environ.get('APP_NAME', 'Grid Trading Tool')
 EXE_NAME = f"{APP_NAME}-{VERSION}"
 BUILD_DIR = os.path.join(project_root, 'build')
 DIST_DIR = os.path.join(project_root, 'dist')
-SPEC_FILE = os.path.join(project_root, f'{APP_NAME}.spec')
+SPEC_FILE = os.path.join(BUILD_DIR, f'{APP_NAME}.spec')
 
 def run_command(command, error_message):
     try:

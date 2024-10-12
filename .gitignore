@@ -175,3 +175,4 @@ logs/*
 !logs/.gitkeep
 output/*
 !output/.gitkeep
+!build/Grid Trading Tool.spec

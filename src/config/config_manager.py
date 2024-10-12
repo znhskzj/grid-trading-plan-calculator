@@ -82,7 +82,7 @@ class ConfigManager:
         return cls._instance
 
     def __init__(self):
-        self.config_dir = os.path.join(os.path.dirname(__file__), '..')
+        self.config_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.system_config_path = os.path.join(self.config_dir, SYSTEM_CONFIG_FILE)
         self.user_config_path = os.path.join(self.config_dir, USER_CONFIG_FILE)
         self.load_configurations()
