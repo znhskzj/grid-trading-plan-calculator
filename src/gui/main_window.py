@@ -174,7 +174,7 @@ class MainWindow:
 
     def update_status_bar(self, message: str) -> None:
         if hasattr(self, 'status_bar'):
-            self.status_bar.config(text=message)
+            self.status_bar.set("%s", message)  # 使用格式字符串和参数
         else:
             print(f"Status: {message}")  # 如果状态栏还未创建,则打印到控制台
 

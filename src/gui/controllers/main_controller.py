@@ -6,6 +6,7 @@ from tkinter import messagebox, simpledialog
 import tkinter as tk
 from typing import Dict, Any, List, Tuple, Optional
 from src.utils.error_handler import APIError, TradingLogicError, InputValidationError
+from src.utils.gui_helpers import exception_handler
 from ..viewmodels.main_viewmodel import MainViewModel
 from src.core.trading_logic import TradingLogic
 from src.config.config_manager import ConfigManager
@@ -113,7 +114,14 @@ class MainController:
             self.viewmodel.update_status(f"Moomoo 连接测试错误: {str(e)}")
             logger.error(f"Moomoo 连接测试错误: {str(e)}")
     
+    @exception_handler
     def run_calculation(self) -> None:
+        error_message = self.viewmodel.validate_inputs()
+        if error_message:
+            messagebox.showerror("输入错误", error_message)
+            self.viewmodel.update_status("输入验证失败")
+            return
+
         logger.info("开始运行计算...")
         self.viewmodel.update_status("开始计算购买计划...")
         
@@ -132,39 +140,67 @@ class MainController:
             result += calculation_result
             
             self.display_results(result)
-            self.viewmodel.update_status("计算完成")
             
-            logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol}")
-        except Exception as e:
-            self._handle_calculation_error(f"计算过程中发生错误: {str(e)}")
+            if not self.viewmodel.current_symbol:
+                self.viewmodel.update_status("计算完成 (无标的)")
+            else:
+                self.viewmodel.update_status("计算完成")
             
+            logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol or '无'}")
+        except (InputValidationError, TradingLogicError, ValueError) as e:
+            error_message = str(e)
+            logger.error(f"计算过程中发生错误: {error_message}")
+            messagebox.showerror("计算错误", error_message)
+            self.viewmodel.display_results(f"计算失败: {error_message}")
+            self.viewmodel.update_status("计算失败")
+
+    @exception_handler
     def calculate_with_reserve(self, reserve_percentage: int) -> None:
         """执行保留部分资金的计算"""
+        error_message = self.viewmodel.validate_inputs()
+        if error_message:
+            messagebox.showerror("输入错误", error_message)
+            self.viewmodel.update_status("输入验证失败")
+            return
+
         logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
         self.viewmodel.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
         
         try:
-            self.viewmodel.update_input_values(self.view)
-            self._validate_inputs()
             input_values = self.viewmodel.get_input_values()
             
+            # 确保使用默认值
+            input_values = self.trading_logic.ensure_default_values(input_values)
+            
+            # 计算保留资金
+            total_funds = input_values['funds']
+            reserved_funds = total_funds * (reserve_percentage / 100)
+            available_funds = total_funds - reserved_funds
+            
+            # 更新可用资金
+            input_values['funds'] = available_funds
+            
             result = self._prepare_result_header(with_reserve=True, reserve_percentage=reserve_percentage)
-            buy_plan, warning_message, reserved_funds, summary = self.trading_logic.calculate_with_reserve(input_values, reserve_percentage)
+            buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
             
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary, reserved_funds)
             result += calculation_result
             
-            self.viewmodel.display_results(result)
-            self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金）")
+            self.display_results(result)
             
-            logger.debug(f"计算完成（保留{reserve_percentage}%资金），当前股票代码: {self.viewmodel.current_symbol}")
-        except InputValidationError as e:
-            self._handle_calculation_error(str(e))
-        except TradingLogicError as e:
-            self._handle_calculation_error(str(e))
-        except Exception as e:
-            self._handle_calculation_error(f"计算过程中发生未知错误: {str(e)}")
-
+            if not self.viewmodel.current_symbol:
+                self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金，无标的）")
+            else:
+                self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金）")
+            
+            logger.debug(f"计算完成（保留{reserve_percentage}%资金），当前股票代码: {self.viewmodel.current_symbol or '无'}")
+        except (InputValidationError, TradingLogicError, ValueError) as e:
+            error_message = str(e)
+            logger.error(f"计算过程中发生错误: {error_message}")
+            messagebox.showerror("计算错误", error_message)
+            self.viewmodel.display_results(f"计算失败: {error_message}")
+            self.viewmodel.update_status("计算失败")
+            
     def _calculate_without_stock(self):
         """在没有设置股票代码的情况下进行计算"""
         input_values = self.viewmodel.get_input_values()
@@ -182,7 +218,7 @@ class MainController:
         if error_message:
             raise InputValidationError(error_message)
 
-    def _prepare_result_header(self) -> str:
+    def _prepare_result_header(self, with_reserve=False, reserve_percentage=0) -> str:
         """准备结果头部信息"""
         result = ""
         if self.viewmodel.current_symbol:
@@ -190,14 +226,24 @@ class MainController:
             logger.info(f"计算购买计划，标的: {self.viewmodel.current_symbol}")
         else:
             logger.warning("当前没有设置标的")
-            result += "警告: 未设置标的\n"
+            result += "注意: 未设置标的，使用默认参数计算\n"
         
         input_values = self.viewmodel.get_input_values()
-        result += (f"总资金: {input_values['funds']:.2f} | "
-                   f"可用资金: {input_values['funds']:.2f}\n"
-                   f"初始价格: {input_values['initial_price']:.2f} | "
-                   f"止损价格: {input_values['stop_loss_price']:.2f} | "
-                   f"网格数量: {input_values['num_grids']}\n")
+        total_funds = input_values['funds']
+        
+        if with_reserve:
+            reserved_funds = total_funds * (reserve_percentage / 100)
+            available_funds = total_funds - reserved_funds
+            result += (f"总资金: {total_funds:.2f} | "
+                    f"保留资金: {reserved_funds:.2f} | "
+                    f"可用资金: {available_funds:.2f}\n")
+        else:
+            result += (f"总资金: {total_funds:.2f} | "
+                    f"可用资金: {total_funds:.2f}\n")
+        
+        result += (f"初始价格: {input_values['initial_price']:.2f} | "
+                f"止损价格: {input_values['stop_loss_price']:.2f} | "
+                f"网格数量: {input_values['num_grids']}\n")
         return result
 
     def set_stock_price(self, symbol: str) -> None:
@@ -322,8 +368,12 @@ class MainController:
         max_length = 100  # 可以根据需要调整
         if len(message) > max_length:
             message = message[:max_length] + "..."
-        self.viewmodel.update_status(message)
-        self.main_window.update_status_bar(message)
+        try:
+            self.viewmodel.update_status(message)
+            self.main_window.update_status_bar(message)
+        except Exception as e:
+            logger.error(f"更新状态栏时发生错误: {str(e)}")
+            print(f"更新状态栏时发生错误: {str(e)}")  # 为了调试，也打印到控制台
 
     def display_results(self, result: str) -> None:
         logger.debug(f"Input result to display_results: {result}")

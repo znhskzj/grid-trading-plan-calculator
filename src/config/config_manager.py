@@ -15,7 +15,8 @@ DEFAULT_CONFIG = {
         'default_funds': '50000.0',
         'default_initial_price': '50.0',
         'default_stop_loss_price': '30.0',
-        'default_num_grids': '10',
+        'default_num_grids': '5',
+        'max_num_grids': '10',
         'default_allocation_method': '1'
     },
     'GUI': {

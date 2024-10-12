@@ -3,6 +3,7 @@
 from typing import Dict, Any, Optional
 import logging
 from src.utils.error_handler import InputValidationError
+from src.config.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -76,16 +77,18 @@ class MainViewModel:
 
     def validate_inputs(self) -> Optional[str]:
         """验证所有输入值"""
-        if not self.stock_symbol:
-            return "股票代码未设置"
         if self.current_price <= 0:
             return "当前价格必须大于0"
         if self.stop_loss_price <= 0:
             return "止损价格必须大于0"
         if self.total_investment <= 0:
             return "总投资额必须大于0"
-        if self.grid_levels <= 0:
-            return "网格级别必须大于0"
+        
+        config_manager = ConfigManager()
+        max_num_grids = int(config_manager.get_config('General', {}).get('max_num_grids', 10))
+        if self.grid_levels <= 0 or self.grid_levels > max_num_grids:
+            return f"网格级别必须大于0且不超过{max_num_grids}"
+        
         if self.allocation_method is None:
             return "分配方法未设置"
         return None
@@ -159,3 +162,16 @@ class MainViewModel:
         except ValueError as e:
             logger.error(f"更新输入值时发生错误: {str(e)}")
             raise InputValidationError("请确保所有输入字段都包含有效的数值")
+        
+    def validate_num_grids(self, value: str) -> Optional[str]:
+        try:
+            num_grids = int(value)
+            config_manager = ConfigManager()
+            max_num_grids = int(config_manager.get_config('General', {}).get('max_num_grids', 10))
+            if num_grids <= 0:
+                return "网格数量必须大于0"
+            elif num_grids > max_num_grids:
+                return f"网格数量不能超过{max_num_grids}"
+        except ValueError:
+            return "请输入有效的整数"
+        return None

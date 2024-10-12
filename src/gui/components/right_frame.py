@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from typing import List, Callable, Any, Dict
+from src.config.config_manager import ConfigManager
 from src.utils.logger import setup_logger
 from src.utils.gui_helpers import validate_float_input, validate_int_input
 from src.utils.error_handler import GUIError
@@ -55,29 +56,37 @@ class RightFrame(tk.Frame):
             self.handle_gui_error("创建右侧框架组件时发生错误", e)
 
     def create_input_fields(self) -> None:
+        config_manager = ConfigManager()
+        max_num_grids = int(config_manager.get_config('General', {}).get('max_num_grids', 10))
+
         labels = ["可用资金:", "初始价格:", "止损价格:", "网格数量:", "交易指令:"]
         vars = [self.funds_var, self.initial_price_var, self.stop_loss_price_var, self.num_grids_var, self.instruction_var]
 
         for i, (label, var) in enumerate(zip(labels, vars)):
             ttk.Label(self, text=label).grid(row=i, column=0, sticky="e", pady=2)
-            entry = ttk.Entry(self, textvariable=var, width=20)
-            entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
             
+            if label == "网格数量:":
+                entry = ttk.Spinbox(self, from_=1, to=max_num_grids, textvariable=var, width=18)
+                entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
+                var.trace_add("write", self.on_num_grids_change)
+            else:
+                entry = ttk.Entry(self, textvariable=var, width=20)
+                entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=2)
+
             if label in ["可用资金:", "初始价格:", "止损价格:"]:
                 entry.config(validate="key", validatecommand=(self.register(validate_float_input), '%d', '%P'))
-            elif label == "网格数量:":
-                entry.config(validate="key", validatecommand=(self.register(validate_int_input), '%d', '%P'))
-                var.trace_add("write", self.on_num_grids_change)
             
             if label == "交易指令:":
                 entry.config(width=50)
                 entry.grid(columnspan=2)
-                
                 entry.insert(0, "例：SOXL现价到37.5之间分批买，压力39+，止损36.8")
                 entry.config(foreground="gray")
-                
                 entry.bind('<FocusIn>', self.on_entry_click)
                 entry.bind('<FocusOut>', self.on_focusout)
+
+        # 添加错误标签
+        self.error_label = ttk.Label(self, text="", foreground="red")
+        self.error_label.grid(row=len(labels), column=0, columnspan=2, pady=(5, 0))
 
         # 设置默认值
         default_config = self.controller.config_manager.get_config('RecentCalculations', {})
@@ -287,8 +296,9 @@ class RightFrame(tk.Frame):
         self.controller.config_manager.save_config()
 
     def on_num_grids_change(self, *args):
-        try:
-            num_grids = int(self.num_grids_var.get())
-            self.controller.viewmodel.update_calculation_inputs(grid_levels=num_grids)
-        except ValueError:
-            pass  # 忽略无效输入
+        value = self.num_grids_var.get()
+        error = self.controller.viewmodel.validate_num_grids(value)
+        if error:
+            self.error_label.config(text=error)
+        else:
+            self.error_label.config(text="")

@@ -53,15 +53,27 @@ class TradingLogic:
         :param allocation_method: 分配方式
         :return: 购买计划列表和警告信息
         """
+        config_manager = ConfigManager()
+        max_num_grids = int(config_manager.get_config('General', {}).get('max_num_grids', 10))
+        if num_grids <= 0 or num_grids > max_num_grids:
+            raise TradingLogicError(f"网格数量必须大于0且不超过{max_num_grids}")
+        
         logger.info("开始执行 calculate_buy_plan 函数")
         logger.debug(f"输入参数: funds={funds}, initial_price={initial_price}, stop_loss_price={stop_loss_price}, num_grids={num_grids}, allocation_method={allocation_method}")
 
-        # 使用 trading_config 中的默认值
-        funds = funds or float(self.trading_config.get('default_funds', 50000.0))
-        initial_price = initial_price or float(self.trading_config.get('default_initial_price', 50.0))
-        stop_loss_price = stop_loss_price or float(self.trading_config.get('default_stop_loss_price', 30.0))
-        num_grids = num_grids or int(self.trading_config.get('default_num_grids', 10))
-        allocation_method = int(allocation_method) or int(self.trading_config.get('default_allocation_method', 1))
+        # 使用 ensure_default_values 方法来处理默认值
+        input_values = self.ensure_default_values({
+            'funds': funds,
+            'initial_price': initial_price,
+            'stop_loss_price': stop_loss_price,
+            'num_grids': num_grids,
+            'allocation_method': allocation_method
+        })
+        funds = input_values['funds']
+        initial_price = input_values['initial_price']
+        stop_loss_price = input_values['stop_loss_price']
+        num_grids = input_values['num_grids']
+        allocation_method = input_values['allocation_method']
 
         try:
             self.validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)
@@ -326,3 +338,24 @@ class TradingLogic:
         is_valid: bool = all(parsed_instruction.get(field) is not None for field in required_fields)
         logger.info(f"指令验证结果: {'通过' if is_valid else '失败'}")
         return is_valid
+    
+    def ensure_default_values(self, input_values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        确保所有必要的值都有默认值
+        
+        :param input_values: 输入值字典
+        :return: 更新后的输入值字典
+        """
+        default_values = {
+            'funds': float(self.trading_config.get('default_funds', 50000.0)),
+            'initial_price': float(self.trading_config.get('default_initial_price', 50.0)),
+            'stop_loss_price': float(self.trading_config.get('default_stop_loss_price', 30.0)),
+            'num_grids': int(self.trading_config.get('default_num_grids', 10)),
+            'allocation_method': int(self.trading_config.get('default_allocation_method', 1))
+        }
+        
+        for key, default_value in default_values.items():
+            if not input_values.get(key):
+                input_values[key] = default_value
+        
+        return input_values
