@@ -106,6 +106,44 @@ def parse_file(file_path: str) -> Dict[str, Any]:
         'functions': functions
     }
 
+def get_project_structure(project_root: str, exclude_patterns: List[str], default_excludes: set) -> Dict[str, Any]:
+    """获取完整的项目目录结构"""
+    structure = {"name": os.path.basename(project_root), "type": "directory", "children": []}
+    
+    for root, dirs, files in os.walk(project_root):
+        # 修改 dirs 列表以跳过排除的目录
+        dirs[:] = [d for d in dirs if not should_exclude(os.path.join(root, d), exclude_patterns, default_excludes)]
+        
+        rel_path = os.path.relpath(root, project_root)
+        current = structure
+        if rel_path != '.':
+            for part in rel_path.split(os.sep):
+                found = next((c for c in current["children"] if c["name"] == part), None)
+                if not found:
+                    new_dir = {"name": part, "type": "directory", "children": []}
+                    current["children"].append(new_dir)
+                    current = new_dir
+                else:
+                    current = found
+        
+        for file in files:
+            if not should_exclude(os.path.join(rel_path, file), exclude_patterns, default_excludes):
+                current["children"].append({"name": file, "type": "file"})
+    
+    return structure
+
+def generate_structure_markdown(structure: Dict[str, Any], level: int = 0) -> str:
+    """生成目录结构的Markdown表示"""
+    result = ""
+    indent = "  " * level
+    if structure["type"] == "directory":
+        result += f"{indent}- 📁 {structure['name']}/\n"
+        for child in sorted(structure["children"], key=lambda x: (x["type"], x["name"])):
+            result += generate_structure_markdown(child, level + 1)
+    else:
+        result += f"{indent}- 📄 {structure['name']}\n"
+    return result
+
 def analyze_project(project_root: str, exclude_patterns: List[str], default_excludes: set) -> Dict[str, Any]:
     """分析项目目录下的Python文件，跳过排除的文件和目录"""
     project_info = {}
@@ -129,19 +167,25 @@ def analyze_project(project_root: str, exclude_patterns: List[str], default_excl
     
     return project_info
 
-def generate_markdown_report(project_info: Dict[str, Any], output_file: str):
-    """生成Markdown格式的报告"""
+def generate_markdown_report(project_info: Dict[str, Any], project_structure: Dict[str, Any], output_file: str):
+    """生成Markdown格式的报告，包括项目结构和Python文件分析"""
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write("# Project Structure Report\n\n")
         f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
+        f.write("## Project Directory Structure\n\n")
+        f.write("```\n")
+        f.write(generate_structure_markdown(project_structure))
+        f.write("```\n\n")
+        
+        f.write("## Python File Analysis\n\n")
         for file_path, file_info in project_info.items():
-            f.write(f"## {file_path}\n\n")
+            f.write(f"### {file_path}\n\n")
             
             if file_info['classes']:
-                f.write("### Classes\n\n")
+                f.write("#### Classes\n\n")
                 for class_info in file_info['classes']:
-                    f.write(f"#### {class_info['name']}\n\n")
+                    f.write(f"##### {class_info['name']}\n\n")
                     f.write(f"- **Description**: {class_info['docstring']}\n")
                     f.write(f"- **Line**: {class_info['lineno']}\n\n")
                     
@@ -153,9 +197,9 @@ def generate_markdown_report(project_info: Dict[str, Any], output_file: str):
                             f.write(f"  - Line: {method['lineno']}\n\n")
             
             if file_info['functions']:
-                f.write("### Functions\n\n")
+                f.write("#### Functions\n\n")
                 for func in file_info['functions']:
-                    f.write(f"#### {func['name']}({', '.join(func['args'])})\n\n")
+                    f.write(f"##### {func['name']}({', '.join(func['args'])})\n\n")
                     f.write(f"- **Description**: {func['docstring']}\n")
                     f.write(f"- **Line**: {func['lineno']}\n\n")
             
@@ -194,6 +238,10 @@ def main():
     # 合并默认排除和用户指定的排除
     default_excludes = DEFAULT_EXCLUDES.union(set(args.exclude or []))
     
+    # 获取项目结构
+    project_structure = get_project_structure(project_root, exclude_patterns, default_excludes)
+    
+    # 分析Python文件
     project_info = analyze_project(project_root, exclude_patterns, default_excludes)
     
     # 生成带时间戳的文件名
@@ -202,11 +250,11 @@ def main():
     # 保存为 JSON 文件
     json_output = os.path.join(output_dir, f'project_structure_{timestamp}.json')
     with open(json_output, 'w', encoding='utf-8') as f:
-        json.dump(project_info, f, ensure_ascii=False, indent=2)
+        json.dump({"structure": project_structure, "analysis": project_info}, f, ensure_ascii=False, indent=2)
     
     # 生成 Markdown 报告
     markdown_output = os.path.join(output_dir, f'project_structure_report_{timestamp}.md')
-    generate_markdown_report(project_info, markdown_output)
+    generate_markdown_report(project_info, project_structure, markdown_output)
     
     print(f"Project structure analysis complete.")
     print(f"JSON output saved to: {json_output}")
