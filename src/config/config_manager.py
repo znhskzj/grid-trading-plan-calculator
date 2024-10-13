@@ -6,6 +6,7 @@ import configparser
 import json
 import difflib
 from typing import Dict, Any
+from configparser import ConfigParser, ExtendedInterpolation
 import logging
 
 logger = logging.getLogger('config_manager')
@@ -104,7 +105,7 @@ class ConfigManager:
 
     def load_system_config(self) -> Dict[str, Any]:
         """加载系统配置。如果配置文件不存在，则使用默认配置。"""
-        config = configparser.ConfigParser()
+        config = ConfigParser(interpolation=None)
         config.read_dict(DEFAULT_CONFIG)
         
         if os.path.exists(self.system_config_path):
@@ -114,7 +115,7 @@ class ConfigManager:
 
     def load_user_config(self) -> Dict[str, Any]:
         """加载用户配置。如果配置文件不存在或为空，则使用默认配置。"""
-        config = configparser.ConfigParser()
+        config = ConfigParser(interpolation=None)
         if os.path.exists(self.user_config_path):
             with io.open(self.user_config_path, 'r', encoding='utf-8') as f:
                 config.read_file(f)
@@ -144,7 +145,7 @@ class ConfigManager:
 
     def save_system_config(self) -> None:
         """保存系统配置到文件"""
-        config_parser = configparser.ConfigParser()
+        config_parser = ConfigParser(interpolation=None)
         for section, values in self.system_config.items():
             config_parser[section] = values
 
@@ -154,7 +155,7 @@ class ConfigManager:
 
     def save_user_config(self) -> None:
         """保存用户配置到文件"""
-        config_parser = configparser.ConfigParser()
+        config_parser = ConfigParser(interpolation=None)
         for section, options in self.user_config.items():
             config_parser[section] = {k: str(v) for k, v in options.items()}
         
@@ -174,23 +175,25 @@ class ConfigManager:
         """设置配置值"""
         if isinstance(key, str) and '.' in key:
             section, option = key.split('.', 1)
-            if is_system_config:
-                if section not in self.system_config:
-                    self.system_config[section] = {}
-                self.system_config[section][option] = value
-                self.save_system_config()
-            else:
-                if section not in self.user_config:
-                    self.user_config[section] = {}
-                self.user_config[section][option] = value
-                self.save_user_config()
         else:
-            if is_system_config:
-                self.system_config[key] = value
-                self.save_system_config()
-            else:
-                self.user_config[key] = value
-                self.save_user_config()
+            section, option = key, value
+
+        config = self.system_config if is_system_config else self.user_config
+
+        if section not in config:
+            config[section] = {}
+        
+        if isinstance(value, dict):
+            # 如果值是字典，递归设置嵌套的配置
+            for sub_key, sub_value in value.items():
+                self.set_config(f"{section}.{sub_key}", sub_value, is_system_config)
+        else:
+            config[section][option] = value
+
+        if is_system_config:
+            self.save_system_config()
+        else:
+            self.save_user_config()
 
     def reset_to_default(self) -> None:
         """重置用户配置到默认状态"""
@@ -286,3 +289,7 @@ class ConfigManager:
                 logger.debug(f"配置差异:\n" + "\n".join(diff))
         except Exception as e:
             logger.error(f"保存用户设置时发生错误: {str(e)}", exc_info=True)
+
+    def save_config(self):
+        self.save_user_config()
+        self.save_system_config()

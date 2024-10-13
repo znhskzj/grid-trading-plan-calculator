@@ -19,28 +19,39 @@ logger = logging.getLogger(__name__)
 
 class MainWindow:
     def __init__(self, master: tk.Tk, version: str):
-        self.master = master
-        self.version = version
-        self.master.title(f"网格交易计算器 v{version}")
-        self.config_manager = ConfigManager()
-        self.controller = MainController(self)
+            self.master = master
+            self.version = version
+            self.master.title(f"网格交易计算器 v{version}")
+            self.config_manager = ConfigManager()
+            self.controller = MainController(self)
+            
+            self.setup_window_properties()
+            self.create_widgets()
+            self.setup_layout()
+            self.load_initial_data()   
         
-        self.setup_window_properties()
-        self.create_widgets()
-        self.setup_layout()
-        self.load_initial_data()   
-     
     def load_initial_data(self):
         common_stocks = self.config_manager.get_config('CommonStocks', {})
         self.left_frame.update_common_stocks(common_stocks)
 
         default_config = self.config_manager.get_config('RecentCalculations', {})
         allocation_method = self.config_manager.get_config('General', {}).get('allocation_method', '0')
-        self.right_frame.set_initial_values(
+        
+        # 更新 RightFrame
+        self.right_frame.set_default_values(
             funds=default_config.get('funds', '50000'),
             initial_price=default_config.get('initial_price', '100'),
             stop_loss_price=default_config.get('stop_loss_price', '90'),
             num_grids=default_config.get('num_grids', '10'),
+            allocation_method=allocation_method
+        )
+
+        # 更新 ViewModel
+        self.controller.viewmodel.update_calculation_inputs(
+            total_investment=float(default_config.get('funds', 50000)),
+            current_price=float(default_config.get('initial_price', 100)),
+            stop_loss_price=float(default_config.get('stop_loss_price', 90)),
+            grid_levels=int(default_config.get('num_grids', 10)),
             allocation_method=allocation_method
         )
 

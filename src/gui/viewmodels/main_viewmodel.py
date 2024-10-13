@@ -12,10 +12,11 @@ class MainViewModel:
         self.stock_symbol: str = ""
         self.current_price: float = 0.0
         self.stop_loss_price: float = 0.0
-        self.total_investment: float = 0.0
-        self.grid_levels: int = 0
-        self.allocation_method: int = 0 
-        self.api_choice: str = ""
+        self.total_investment: float = 50000.0  # 设置默认值
+        self.grid_levels: int = 5  # 设置默认值
+        self.allocation_method: int = "1"  # 设置默认值
+        
+        self.api_choice: str = "yahoo"
         self.current_symbol: str = ""
         self.status_message: str = ""
         self.result_message: str = ""
@@ -42,18 +43,13 @@ class MainViewModel:
         logger.info(f"止损价格更新为: {price}")
 
     def get_input_values(self) -> Dict[str, Any]:
-        """获取所有输入值"""
-        try:
-            return {
-                "funds": self.total_investment if self.total_investment > 0 else 50000,  # 添加默认值
-                "initial_price": self.current_price,
-                "stop_loss_price": self.stop_loss_price,
-                "num_grids": self.grid_levels,
-                "allocation_method": self.allocation_method
-            }
-        except AttributeError as e:
-            logger.error(f"获取输入值时发生错误: {str(e)}")
-            raise InputValidationError("一个或多个必要的输入值未设置")
+        return {
+            "funds": self.total_investment,
+            "initial_price": self.current_price,
+            "stop_loss_price": self.stop_loss_price,
+            "num_grids": self.grid_levels,
+            "allocation_method": int(self.allocation_method)
+        }
 
     def update_status(self, message: str) -> None:
         """更新状态消息"""
@@ -76,7 +72,6 @@ class MainViewModel:
         logger.info(f"价格字段已更新 - 股票: {symbol}, 当前价格: {current_price}, 止损价格: {stop_loss_price}")
 
     def validate_inputs(self) -> Optional[str]:
-        """验证所有输入值"""
         if self.current_price <= 0:
             return "当前价格必须大于0"
         if self.stop_loss_price <= 0:
@@ -89,7 +84,7 @@ class MainViewModel:
         if self.grid_levels <= 0 or self.grid_levels > max_num_grids:
             return f"网格级别必须大于0且不超过{max_num_grids}"
         
-        if self.allocation_method is None:
+        if not self.allocation_method:
             return "分配方法未设置"
         return None
 
@@ -117,11 +112,10 @@ class MainViewModel:
             "result": self.result_message
         }
     
-    def update_calculation_inputs(self, total_investment: float, grid_levels: int, allocation_method: str) -> None:
-        self.total_investment = total_investment
-        self.grid_levels = grid_levels
-        self.allocation_method = int(allocation_method)  # 确保转换为整数
-        logger.info(f"更新计算输入: 总投资={total_investment}, 网格数量={grid_levels}, 分配方法={self.allocation_method}")
+    def update_calculation_inputs(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        logger.debug(f"ViewModel 更新: {kwargs}")  # 添加日志
 
     def bulk_update(self, data: Dict[str, Any]) -> None:
         """批量更新多个字段"""
@@ -175,3 +169,7 @@ class MainViewModel:
         except ValueError:
             return "请输入有效的整数"
         return None
+    
+    def update_allocation_method(self, method: int):
+        self.allocation_method = method
+        logger.debug(f"分配方法更新为: {method}")

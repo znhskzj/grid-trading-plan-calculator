@@ -95,6 +95,7 @@ class TradingLogic:
         logger.debug(f"生成的价格网格: {buy_prices}")
 
         buy_quantities: List[int] = self.calculate_weights(buy_prices.tolist(), allocation_method, max_shares)
+        logger.debug(f"初始购买数量: {buy_quantities}")
 
         total_cost: float = sum(price * quantity for price, quantity in zip(buy_prices, buy_quantities))
         if total_cost > funds:
@@ -161,9 +162,10 @@ class TradingLogic:
         :param max_shares: 最大股数
         :return: 各价格点的股数列表
         """
-        logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}")
+        logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}, 价格列表={prices}")
 
         if len(prices) == 1:
+            logger.debug("只有一个价格点，直接返回最大股数")
             return [max_shares]
 
         allocation_methods: Dict[int, callable] = {
@@ -173,13 +175,23 @@ class TradingLogic:
         }
 
         weights: List[float] = allocation_methods.get(method, lambda: [])()
+        logger.debug(f"分配方式 {method} 的初始权重: {weights}")
+        
         if not weights:
+            logger.error(f"无效的分配方式: {method}")
             raise TradingLogicError("无效的分配方式")
 
         total_weight: float = sum(weights)
-        initial_shares: List[int] = [max(1, int(max_shares * (weight / total_weight))) for weight in weights]
+        logger.debug(f"权重总和: {total_weight}")
 
+        initial_shares: List[int] = [max(1, int(max_shares * (weight / total_weight))) for weight in weights]
         logger.debug(f"计算得到的初始股数: {initial_shares}")
+
+        # 计算实际使用的股数和剩余股数
+        actual_shares = sum(initial_shares)
+        remaining_shares = max_shares - actual_shares
+        logger.debug(f"实际分配的总股数: {actual_shares}, 剩余股数: {remaining_shares}")
+
         return initial_shares
         
     def equal_amount_allocation(self, num_prices: int) -> List[float]:
@@ -203,7 +215,9 @@ class TradingLogic:
         price_range: float = max_price - min_price
         if price_range == 0:
             return [1.0] * len(prices)
-        return [np.exp(3 * (max_price - price) / price_range) for price in prices]
+        weights = [np.exp(3 * (max_price - price) / price_range) for price in prices]
+        logger.debug(f"指数分配权重: {weights}")
+        return weights
 
     def linear_weighted_allocation(self, num_prices: int) -> List[float]:
         """

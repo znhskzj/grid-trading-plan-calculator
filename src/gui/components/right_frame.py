@@ -16,7 +16,7 @@ class RightFrame(tk.Frame):
         self.controller = controller
         self.initialize_variables()
         self.create_widgets()
-        self.set_default_allocation_method()
+        self.set_default_values()
 
     def initialize_variables(self) -> None:
         self.funds_var = tk.StringVar()
@@ -24,7 +24,7 @@ class RightFrame(tk.Frame):
         self.stop_loss_price_var = tk.StringVar()
         self.num_grids_var = tk.StringVar()
         self.instruction_var = tk.StringVar()
-        self.allocation_method_var = tk.StringVar()
+        self.allocation_method_var = tk.IntVar()
         self.api_choice = tk.StringVar(value="yahoo")
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
@@ -33,17 +33,6 @@ class RightFrame(tk.Frame):
         self.available_apis = self.controller.config_manager.get_config('AvailableAPIs', {}).get('apis', '').split(',')
         if not self.available_apis:
             self.available_apis = ["yahoo", "alpha_vantage"] 
-
-        # 加载默认配置
-        default_config = self.controller.config_manager.get_config('RecentCalculations', {})
-        self.funds_var.set(default_config.get('funds', ''))
-        self.initial_price_var.set(default_config.get('initial_price', ''))
-        self.stop_loss_price_var.set(default_config.get('stop_loss_price', ''))
-        self.num_grids_var.set(default_config.get('num_grids', ''))
-
-    def set_default_allocation_method(self) -> None:
-        default_method = self.controller.config_manager.get_config('General', {}).get('allocation_method', '1')
-        self.allocation_method_var.set(default_method)
 
     def create_widgets(self) -> None:
         try:
@@ -163,12 +152,11 @@ class RightFrame(tk.Frame):
         }
 
     def run_calculation_with_check(self) -> None:
-        if not self.allocation_method_var.get():
-            messagebox.showwarning("警告", "请选择一个分配方式后再进行计算。")
-            return
-        input_values = self.get_all_input_values()
-        self.controller.viewmodel.update_input_values(input_values)
-        self.controller.run_calculation()
+        try:
+            self.update_viewmodel()
+            self.controller.run_calculation()
+        except Exception as e:
+            self.handle_gui_error("运行计算时发生错误", e)
 
     def create_api_widgets(self, parent_frame: ttk.Frame) -> None:
         api_frame = ttk.LabelFrame(parent_frame, text="API 选择")
@@ -270,30 +258,45 @@ class RightFrame(tk.Frame):
             if hasattr(self, f"{field}_var"):
                 getattr(self, f"{field}_var").set(str(value))
 
-    def set_initial_values(self, funds, initial_price, stop_loss_price, num_grids, allocation_method):
-        self.funds_var.set(funds)
-        self.initial_price_var.set(initial_price)
-        self.stop_loss_price_var.set(stop_loss_price)
-        self.num_grids_var.set(num_grids)
-        self.allocation_method_var.set(allocation_method)
-        
+    def set_default_values(self, funds: str = '', initial_price: str = '', 
+                           stop_loss_price: str = '', num_grids: str = '', 
+                           allocation_method: str = '') -> None:
+        # 如果没有提供参数，则使用配置中的默认值
+        default_config = self.controller.config_manager.get_config('RecentCalculations', {})
+        self.funds_var.set(funds or default_config.get('funds', '50000'))
+        self.initial_price_var.set(initial_price or default_config.get('initial_price', '100'))
+        self.stop_loss_price_var.set(stop_loss_price or default_config.get('stop_loss_price', '90'))
+        self.num_grids_var.set(num_grids or default_config.get('num_grids', '10'))
+        self.allocation_method_var.set(allocation_method or 
+                                       self.controller.config_manager.get_config('General', {}).get('allocation_method', '0'))
+        # 确保分配方式是有效的
+        if self.allocation_method_var.get() not in ['0', '1', '2']:
+            self.allocation_method_var.set('0')  # 设置默认值为 '0'
         # 更新 ViewModel
-        self.controller.viewmodel.update_calculation_inputs(
-            total_investment=float(funds),
-            grid_levels=int(num_grids),
-            allocation_method=allocation_method
-        )
+        self.update_viewmodel()
+
+    def update_viewmodel(self) -> None:
+        try:
+            self.controller.viewmodel.update_calculation_inputs(
+                total_investment=float(self.funds_var.get() or 0),
+                current_price=float(self.initial_price_var.get() or 0),
+                stop_loss_price=float(self.stop_loss_price_var.get() or 0),
+                grid_levels=int(self.num_grids_var.get() or 0),
+                allocation_method=self.allocation_method_var.get()
+            )
+        except ValueError as e:
+            logger.error(f"更新 ViewModel 时发生错误: {str(e)}")
+            self.handle_gui_error("输入值无效", e)
 
     def on_allocation_method_change(self):
         # 当分配方法改变时更新 ViewModel
         self.controller.viewmodel.update_calculation_inputs(
             total_investment=float(self.funds_var.get()),
             grid_levels=int(self.num_grids_var.get()),
-            allocation_method=self.allocation_method_var.get()
+            allocation_method=int(self.allocation_method_var.get())  # 确保这里是整数
         )
         # 保存用户选择的分配方式到配置文件
-        self.controller.config_manager.set_config('General', 'allocation_method', self.allocation_method_var.get())
-        self.controller.config_manager.save_config()
+        self.controller.config_manager.set_config('General.allocation_method', self.allocation_method_var.get())
 
     def on_num_grids_change(self, *args):
         value = self.num_grids_var.get()

@@ -20,27 +20,23 @@ class MainController:
         self.main_window = main_window
         self.config_manager = ConfigManager()
         self.viewmodel = MainViewModel()
-        self.viewmodel.api_choice = self.config_manager.get_config('API', {}).get('choice', 'yahoo')
         self.trading_logic = TradingLogic(self.config_manager)
         self.api_manager = APIManager()
-        self.moomoo_api = self.api_manager.trading_api  # 使用 APIManager 中的 MoomooAdapter 实例
-        self.current_acc_id = None
-        self.trade_env = TrdEnv.SIMULATE
-        self.market = TrdMarket.US
-        self.moomoo_connected = False
-        self.last_connected_env = None
-        self.last_connected_market = None
-        self.force_simulate = False
+        self.moomoo_api = self.api_manager.trading_api
 
-        # 加载默认配置
+        # 初始化设置
+        self.initialize_settings()
+
+    def initialize_settings(self):
         default_config = self.config_manager.get_config('RecentCalculations', {})
-        
-        # 使用默认配置更新 ViewModel
         self.viewmodel.update_calculation_inputs(
             total_investment=float(default_config.get('funds', 50000)),
-            grid_levels=int(default_config.get('num_grids', 10)),
-            allocation_method=default_config.get('allocation_method', '0')
+            current_price=float(default_config.get('initial_price', 0)),
+            stop_loss_price=float(default_config.get('stop_loss_price', 0)),
+            grid_levels=int(default_config.get('num_grids', 5)),
+            allocation_method=default_config.get('allocation_method', '1')
         )
+        self.viewmodel.api_choice = self.config_manager.get_config('API', {}).get('choice', 'yahoo')
 
     def get_current_account(self):
         self.trade_env = TrdEnv.REAL if self.viewmodel.trade_mode == "真实" else TrdEnv.SIMULATE
@@ -127,6 +123,7 @@ class MainController:
         
         try:
             input_values = self.viewmodel.get_input_values()
+            input_values['allocation_method'] = int(input_values['allocation_method'])
             logger.debug(f"计算使用的输入值: {input_values}")
         
             if not self.viewmodel.current_symbol:
@@ -136,6 +133,9 @@ class MainController:
             result = self._prepare_result_header()
             buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
             
+            # 添加日志以检查 summary 字典的内容
+            logger.debug(f"计算结果摘要: {summary}")
+
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
             result += calculation_result
             
@@ -307,18 +307,27 @@ class MainController:
         if warning_message:
             result += warning_message + "\n\n"
         result += "购买计划如下：\n"
-        for price, quantity in buy_plan:
-            result += f"价格: {price:.2f}, 数量: {quantity}\n"
         
-        result += f"\n总购买股数: {summary['total_shares']}\n"
-        result += f"总投资成本: {summary['total_cost']:.2f}\n"
-        result += f"平均购买价格: {summary['average_price']:.2f}\n"
-        result += f"最大潜在亏损: {summary['max_loss']:.2f}\n"
-        result += f"最大亏损比例: {summary['max_loss_percentage']:.2f}%\n"
-        result += f"选择的分配方式: {summary['allocation_method']}\n"
-        
-        if reserved_funds > 0:
-            result += f"\n保留资金: {reserved_funds:.2f}\n"
+        try:
+            for price, quantity in buy_plan:
+                result += f"价格: {price:.2f}, 数量: {quantity}\n"
+            
+            # 使用 get 方法安全地获取 summary 中的值，并提供默认值
+            result += f"\n总购买股数: {summary.get('total_shares', 0)}\n"
+            result += f"总投资成本: {summary.get('total_cost', 0):.2f}\n"
+            result += f"平均购买价格: {summary.get('average_price', 0):.2f}\n"
+            result += f"最大潜在亏损: {summary.get('max_loss', 0):.2f}\n"
+            result += f"最大亏损比例: {summary.get('max_loss_percentage', 0):.2f}%\n"
+            result += f"选择的分配方式: {summary.get('allocation_method', '未知')}\n"
+            
+            if reserved_funds > 0:
+                result += f"\n保留资金: {reserved_funds:.2f}\n"
+            
+        except Exception as e:
+            logger.error(f"格式化购买计划时发生错误: {str(e)}")
+            logger.debug(f"buy_plan: {buy_plan}")
+            logger.debug(f"summary: {summary}")
+            result += f"\n格式化结果时发生错误: {str(e)}\n"
         
         return result
 
@@ -345,13 +354,16 @@ class MainController:
         self.viewmodel.update_api_choice(config.get('api_choice', 'yahoo'))
         # 加载其他配置...
 
-    def save_config(self) -> None:
+    def save_config(self):
         """保存配置到配置管理器"""
         config = {
             'api_choice': self.viewmodel.api_choice,
             # 保存其他配置...
         }
         self.config_manager.set_config('Trading', config)
+
+    def save_user_settings(self):
+        self.config_manager.save_user_config()
 
     def save_to_csv(self):
         try:
