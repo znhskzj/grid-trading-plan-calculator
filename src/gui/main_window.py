@@ -57,6 +57,9 @@ class MainWindow:
 
         self.master.update_idletasks()
         self.master.after(100, self.check_widget_visibility)
+        
+        # 添加初始状态显示
+        self.update_status_bar("准备就绪")
     
     def setup_window_properties(self) -> None:
         """设置窗口属性"""

@@ -119,7 +119,6 @@ class MainController:
             return
 
         logger.info("开始运行计算...")
-        self.viewmodel.update_status("开始计算购买计划...")
         
         try:
             input_values = self.viewmodel.get_input_values()
@@ -133,18 +132,21 @@ class MainController:
             result = self._prepare_result_header()
             buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
             
-            # 添加日志以检查 summary 字典的内容
-            logger.debug(f"计算结果摘要: {summary}")
-
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
             result += calculation_result
             
             self.display_results(result)
             
-            if not self.viewmodel.current_symbol:
-                self.viewmodel.update_status("计算完成 (无标的)")
-            else:
-                self.viewmodel.update_status("计算完成")
+            # 更新状态栏消息
+            allocation_methods = {
+                0: "等金额分配",
+                1: "等比例分配",
+                2: "线性加权"
+            }
+            allocation_method = allocation_methods.get(input_values['allocation_method'], "未知")
+            status_message = (f"已按{allocation_method}方式完成购买计划计算"
+                            f"{f' (标的: {self.viewmodel.current_symbol})' if self.viewmodel.current_symbol else ''}")
+            self.update_status(status_message)
             
             logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol or '无'}")
         except (InputValidationError, TradingLogicError, ValueError) as e:
@@ -164,7 +166,6 @@ class MainController:
             return
 
         logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
-        self.viewmodel.update_status(f"开始计算（保留{reserve_percentage}%资金）...")
         
         try:
             input_values = self.viewmodel.get_input_values()
@@ -188,12 +189,19 @@ class MainController:
             
             self.display_results(result)
             
-            if not self.viewmodel.current_symbol:
-                self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金，无标的）")
-            else:
-                self.viewmodel.update_status(f"计算完成（保留{reserve_percentage}%资金）")
+            # 更新状态栏消息，包含分配方式和标的信息
+            allocation_methods = {
+                0: "等金额分配",
+                1: "等比例分配",
+                2: "线性加权"
+            }
+            allocation_method = allocation_methods.get(input_values['allocation_method'], "未知")
+            status_message = (f"已按{allocation_method}方式完成保留{reserve_percentage}%总资金的购买计划计算"
+                            f"{f' (标的: {self.viewmodel.current_symbol})' if self.viewmodel.current_symbol else ''}")
+            self.update_status(status_message)
             
             logger.debug(f"计算完成（保留{reserve_percentage}%资金），当前股票代码: {self.viewmodel.current_symbol or '无'}")
+                
         except (InputValidationError, TradingLogicError, ValueError) as e:
             error_message = str(e)
             logger.error(f"计算过程中发生错误: {error_message}")
@@ -348,22 +356,64 @@ class MainController:
         self.viewmodel.update_status("计算已重置")
         self.viewmodel.display_results("所有输入已清除。请输入新的参数。")
 
-    def load_config(self) -> None:
-        """从配置管理器加载配置"""
-        config = self.config_manager.get_config('Trading', {})
-        self.viewmodel.update_api_choice(config.get('api_choice', 'yahoo'))
-        self.viewmodel.update_allocation_method(int(config.get('allocation_method', 1)))
-        # 加载其他配置...
-
     def save_config(self):
         """保存配置到配置管理器"""
-        config = {
-            'api_choice': self.viewmodel.api_choice,
-            'allocation_method': self.viewmodel.allocation_method,
-            # 保存其他配置...
-        }
-        self.config_manager.set_config('Trading', config)
+        try:
+            # 保存通用配置
+            general_config = {
+                'allocation_method': self.viewmodel.allocation_method,
+                'max_num_grids': 10
+            }
+            self.config_manager.set_config('General', general_config)
+            
+            # 保存 API 配置
+            api_config = {
+                'choice': self.viewmodel.api_choice
+            }
+            self.config_manager.set_config('API', api_config)
+            
+            # 保存最近的计算配置
+            recent_calc = {
+                'funds': str(self.viewmodel.total_investment),
+                'initial_price': str(self.viewmodel.current_price),
+                'stop_loss_price': str(self.viewmodel.stop_loss_price),
+                'num_grids': str(self.viewmodel.grid_levels)
+            }
+            self.config_manager.set_config('RecentCalculations', recent_calc)
+            
+            # 立即保存到文件
+            self.config_manager.save_user_config()
+            logger.info("用户配置已保存")
+        except Exception as e:
+            logger.error(f"保存配置时发生错误: {str(e)}")
 
+    def load_config(self) -> None:
+        """从配置管理器加载配置"""
+        try:
+            # 加载通用配置
+            general_config = self.config_manager.get_config('General', {})
+            # 先尝试获取用户配置中的 allocation_method，如果没有则使用默认值
+            allocation_method = int(general_config.get('allocation_method', 1))
+            self.viewmodel.update_allocation_method(allocation_method)
+            
+            # 加载 API 配置
+            api_config = self.config_manager.get_config('API', {})
+            self.viewmodel.update_api_choice(api_config.get('choice', 'yahoo'))
+            
+            # 加载最近的计算配置
+            recent_calc = self.config_manager.get_config('RecentCalculations', {})
+            if recent_calc:
+                self.viewmodel.update_calculation_inputs(
+                    total_investment=float(recent_calc.get('funds', 50000)),
+                    current_price=float(recent_calc.get('initial_price', 100)),
+                    stop_loss_price=float(recent_calc.get('stop_loss_price', 90)),
+                    grid_levels=int(recent_calc.get('num_grids', 10)),
+                    allocation_method=allocation_method
+                )
+            logger.info("配置已加载")
+        except Exception as e:
+            logger.error(f"加载配置时发生错误: {str(e)}")
+                
     def save_user_settings(self):
         self.config_manager.save_user_config()
 

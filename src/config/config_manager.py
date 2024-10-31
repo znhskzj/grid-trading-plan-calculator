@@ -18,7 +18,6 @@ DEFAULT_CONFIG = {
         'default_stop_loss_price': '30.0',
         'default_num_grids': '5',
         'max_num_grids': '10',
-        'default_allocation_method': 1,
         'debug_mode': 'False',
         'debug_level': 'INFO'
     },
@@ -53,7 +52,8 @@ DEFAULT_USER_CONFIG = {
         'alpha_vantage_key': ''
     },
     'General': {
-        'allocation_method': 1
+        'allocation_method': 1,
+        'max_num_grids': 10
     },
     'CommonStocks': {
         'stock1': 'AAPL',
@@ -64,7 +64,7 @@ DEFAULT_USER_CONFIG = {
     },
     'MoomooSettings': {
         'trade_mode': '模拟',
-        'market': '港股'
+        'market': '美股'
     },
     'MoomooAPI': {
         'host': '127.0.0.1',
@@ -76,7 +76,7 @@ DEFAULT_USER_CONFIG = {
         'funds': '50000.0',
         'initial_price': '50.0',
         'stop_loss_price': '30.0',
-        'num_grids': '10'
+        'num_grids': '5'
     }
 }
 
