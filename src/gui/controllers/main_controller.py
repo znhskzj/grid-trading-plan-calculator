@@ -253,14 +253,13 @@ class MainController:
 
         try:
             current_price, api_used = self.api_manager.get_stock_price(symbol)
+            current_price = round(current_price, 2)  # 将当前价格四舍五入到2位小数
             self._update_price_fields(symbol, current_price, api_used)
-            
-            self.viewmodel.display_results(f"已更新股票 {symbol} 的价格：{current_price:.2f}")
             
             # 确保更新 UI
             self.main_window.right_frame.update_fields({
                 'initial_price': current_price,
-                'stop_loss_price': current_price * 0.9
+                'stop_loss_price': round(current_price * 0.9, 2)
             })
             
         except APIError as e:
@@ -277,8 +276,11 @@ class MainController:
         self.viewmodel.update_price_fields(symbol, current_price, stop_loss_price)
         
         logger.info(f"更新价格字段，标的: {symbol}, 当前价格: {current_price:.2f}, 止损价格: {stop_loss_price:.2f}")
-        status_message = f"已选择标的 {symbol}，当前价格为 {current_price:.2f} 元 (来自 {api_used})"
-        self.viewmodel.update_status(status_message)
+        
+        # 更新状态栏消息
+        status_message = f"已选择标的 {symbol}，当前价格: {current_price:.2f} 元，止损价格: {stop_loss_price:.2f} 元 (来自 {api_used})"
+        self.update_status(status_message)  # 使用 controller 的 update_status 方法
+        
         result_message = (
             f"选中标的: {symbol}\n"
             f"当前价格: {current_price:.2f} 元 (来自 {api_used})\n"

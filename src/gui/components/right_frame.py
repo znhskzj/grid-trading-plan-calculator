@@ -288,14 +288,27 @@ class RightFrame(tk.Frame):
             self.handle_gui_error("输入值无效", e)
 
     def on_allocation_method_change(self):
+        # 获取当前选择的分配方式名称
+        allocation_methods = {
+            0: "等金额分配",
+            1: "等比例分配",
+            2: "线性加权"
+        }
+        current_method = allocation_methods.get(self.allocation_method_var.get(), "未知")
+        
         # 当分配方法改变时更新 ViewModel
         self.controller.viewmodel.update_calculation_inputs(
             total_investment=float(self.funds_var.get()),
             grid_levels=int(self.num_grids_var.get()),
             allocation_method=int(self.allocation_method_var.get())  # 确保这里是整数
         )
+        
         # 保存用户选择的分配方式到配置文件
-        self.controller.config_manager.set_config('General.allocation_method', self.allocation_method_var.get())
+        self.controller.config_manager.set_config('General.allocation_method', 
+                                            self.allocation_method_var.get())
+        
+        # 更新状态栏
+        self.controller.update_status(f"已切换到{current_method}方式")
 
     def on_num_grids_change(self, *args):
         value = self.num_grids_var.get()
