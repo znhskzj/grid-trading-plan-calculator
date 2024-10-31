@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
         'default_stop_loss_price': '30.0',
         'default_num_grids': '5',
         'max_num_grids': '10',
-        'default_allocation_method': '1',
+        'default_allocation_method': 1,
         'debug_mode': 'False',
         'debug_level': 'INFO'
     },
@@ -53,7 +53,7 @@ DEFAULT_USER_CONFIG = {
         'alpha_vantage_key': ''
     },
     'General': {
-        'allocation_method': '1'
+        'allocation_method': 1
     },
     'CommonStocks': {
         'stock1': 'AAPL',

@@ -35,7 +35,7 @@ class MainWindow:
         self.left_frame.update_common_stocks(common_stocks)
 
         default_config = self.config_manager.get_config('RecentCalculations', {})
-        allocation_method = self.config_manager.get_config('General', {}).get('allocation_method', '0')
+        allocation_method = int(self.config_manager.get_config('General', {}).get('default_allocation_method', 1))
         
         # 更新 RightFrame
         self.right_frame.set_default_values(

@@ -12,9 +12,9 @@ class MainViewModel:
         self.stock_symbol: str = ""
         self.current_price: float = 0.0
         self.stop_loss_price: float = 0.0
-        self.total_investment: float = 50000.0  # 设置默认值
-        self.grid_levels: int = 5  # 设置默认值
-        self.allocation_method: int = "1"  # 设置默认值
+        self.total_investment: float = 50000.0
+        self.grid_levels: int = 5
+        self.allocation_method: int = 1
         
         self.api_choice: str = "yahoo"
         self.current_symbol: str = ""
@@ -48,7 +48,7 @@ class MainViewModel:
             "initial_price": self.current_price,
             "stop_loss_price": self.stop_loss_price,
             "num_grids": self.grid_levels,
-            "allocation_method": int(self.allocation_method)
+            "allocation_method": self.allocation_method
         }
 
     def update_status(self, message: str) -> None:
@@ -84,7 +84,8 @@ class MainViewModel:
         if self.grid_levels <= 0 or self.grid_levels > max_num_grids:
             return f"网格级别必须大于0且不超过{max_num_grids}"
         
-        if not self.allocation_method:
+        # 修改这里的判断条件
+        if self.allocation_method not in [0, 1, 2]:  # 使用明确的值检查
             return "分配方法未设置"
         return None
 

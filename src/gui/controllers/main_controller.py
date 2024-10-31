@@ -34,7 +34,7 @@ class MainController:
             current_price=float(default_config.get('initial_price', 0)),
             stop_loss_price=float(default_config.get('stop_loss_price', 0)),
             grid_levels=int(default_config.get('num_grids', 5)),
-            allocation_method=default_config.get('allocation_method', '1')
+            allocation_method=default_config.get('allocation_method', 1)
         )
         self.viewmodel.api_choice = self.config_manager.get_config('API', {}).get('choice', 'yahoo')
 
@@ -302,7 +302,6 @@ class MainController:
         self.api_manager.switch_price_api(self.viewmodel.api_choice)
 
     def _format_buy_plan(self, buy_plan: List[Tuple[float, int]], warning_message: str, summary: Dict[str, Any], reserved_funds: float = 0) -> str:
-        """格式化购买计划结果"""
         result = ""
         if warning_message:
             result += warning_message + "\n\n"
@@ -312,13 +311,12 @@ class MainController:
             for price, quantity in buy_plan:
                 result += f"价格: {price:.2f}, 数量: {quantity}\n"
             
-            # 使用 get 方法安全地获取 summary 中的值，并提供默认值
             result += f"\n总购买股数: {summary.get('total_shares', 0)}\n"
             result += f"总投资成本: {summary.get('total_cost', 0):.2f}\n"
             result += f"平均购买价格: {summary.get('average_price', 0):.2f}\n"
             result += f"最大潜在亏损: {summary.get('max_loss', 0):.2f}\n"
             result += f"最大亏损比例: {summary.get('max_loss_percentage', 0):.2f}%\n"
-            result += f"选择的分配方式: {summary.get('allocation_method', '未知')}\n"
+            result += f"选择的分配方式: {summary.get('allocation_method_name', '未知')}\n"
             
             if reserved_funds > 0:
                 result += f"\n保留资金: {reserved_funds:.2f}\n"
@@ -352,12 +350,14 @@ class MainController:
         """从配置管理器加载配置"""
         config = self.config_manager.get_config('Trading', {})
         self.viewmodel.update_api_choice(config.get('api_choice', 'yahoo'))
+        self.viewmodel.update_allocation_method(int(config.get('allocation_method', 1)))
         # 加载其他配置...
 
     def save_config(self):
         """保存配置到配置管理器"""
         config = {
             'api_choice': self.viewmodel.api_choice,
+            'allocation_method': self.viewmodel.allocation_method,
             # 保存其他配置...
         }
         self.config_manager.set_config('Trading', config)
@@ -437,7 +437,7 @@ class MainController:
                 'alpha_vantage_key': current_config.get('API', {}).get('alpha_vantage_key', '')
             },
             'General': {
-                'allocation_method': system_config.get('General', {}).get('default_allocation_method', '1'),
+                 'allocation_method': int(system_config.get('General', {}).get('default_allocation_method', 1)),
             },
             'RecentCalculations': {
                 'funds': system_config.get('General', {}).get('default_funds', '10000'),

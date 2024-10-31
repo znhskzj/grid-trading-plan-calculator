@@ -9,10 +9,19 @@ from src.config.config_manager import ConfigManager
 
 logger = setup_logger('trading_logic')
 
+
 class TradingLogic:
+    # 定义类变量
+    ALLOCATION_METHODS = {
+            0: "等金额分配",
+            1: "等比例分配",
+            2: "线性加权"
+        }
+
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.trading_config = self.config_manager.get_trading_config()
+        
 
     def validate_inputs(self, funds: float, initial_price: float, stop_loss_price: float, num_grids: int, allocation_method: int) -> None:
         """
@@ -124,13 +133,15 @@ class TradingLogic:
         max_loss = total_cost - (total_shares * stop_loss_price)
         max_loss_percentage = (max_loss / total_cost) * 100 if total_cost > 0 else 0
 
+        
         summary = {
             "total_shares": total_shares,
             "total_cost": total_cost,
             "average_price": average_price,
             "max_loss": max_loss,
             "max_loss_percentage": max_loss_percentage,
-            "allocation_method": ["等金额分配", "等比例分配", "线性加权分配"][allocation_method],
+            "allocation_method": allocation_method,  # 保存数值
+            "allocation_method_name": self.ALLOCATION_METHODS.get(allocation_method, "未知")
         }
 
         logger.info("calculate_buy_plan 函数执行完毕")

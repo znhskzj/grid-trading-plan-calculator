@@ -99,9 +99,12 @@ class RightFrame(tk.Frame):
         allocation_frame = ttk.LabelFrame(parent_frame, text="分配方式")
         allocation_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
         
-        methods = [("等金额分配", "0", "均匀分配资金"),
-                   ("等比例分配", "1", "指数增长分配"),
-                   ("线性加权", "2", "线性增长分配")]
+        # 设置默认值
+        self.allocation_method_var.set(1)  # 默认选择等比例分配
+        
+        methods = [("等金额分配", 0, "均匀分配资金"),
+                   ("等比例分配", 1, "指数增长分配"),
+                   ("线性加权", 2, "线性增长分配")]
 
         for i, (text, value, desc) in enumerate(methods):
             ttk.Radiobutton(allocation_frame, text=text, variable=self.allocation_method_var, value=value,
@@ -258,20 +261,16 @@ class RightFrame(tk.Frame):
             if hasattr(self, f"{field}_var"):
                 getattr(self, f"{field}_var").set(str(value))
 
-    def set_default_values(self, funds: str = '', initial_price: str = '', 
-                           stop_loss_price: str = '', num_grids: str = '', 
-                           allocation_method: str = '') -> None:
-        # 如果没有提供参数，则使用配置中的默认值
+    def set_default_values(self, funds: str = '', initial_price: str = '',
+                       stop_loss_price: str = '', num_grids: str = '',
+                       allocation_method: int = 1) -> None:
         default_config = self.controller.config_manager.get_config('RecentCalculations', {})
         self.funds_var.set(funds or default_config.get('funds', '50000'))
         self.initial_price_var.set(initial_price or default_config.get('initial_price', '100'))
         self.stop_loss_price_var.set(stop_loss_price or default_config.get('stop_loss_price', '90'))
         self.num_grids_var.set(num_grids or default_config.get('num_grids', '10'))
         self.allocation_method_var.set(allocation_method or 
-                                       self.controller.config_manager.get_config('General', {}).get('allocation_method', '0'))
-        # 确保分配方式是有效的
-        if self.allocation_method_var.get() not in ['0', '1', '2']:
-            self.allocation_method_var.set('0')  # 设置默认值为 '0'
+                            int(self.controller.config_manager.get_config('General', {}).get('default_allocation_method', 1)))
         # 更新 ViewModel
         self.update_viewmodel()
 
