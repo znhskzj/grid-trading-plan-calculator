@@ -4,6 +4,7 @@ import os
 import configparser
 import threading
 import pandas as pd
+import time
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List
 from moomoo import (
@@ -51,46 +52,49 @@ class MoomooAdapter(TradingInterface):
             }
         return dict(config['MoomooAPI'])
 
-    def test_moomoo_connection(self, trade_env: TrdEnv, market: TrdMarket, timeout: float = 10.0) -> bool:
+    def test_moomoo_connection(self, trade_env: TrdEnv, market: TrdMarket, timeout: float = 10.0, max_retries: int = 3) -> bool:
         """
-        测试 Moomoo API 连接
+        测试 Moomoo API 连接，支持重试
+        """
+        # 正确转换市场和环境参数
+        market_obj = market  # 保存原始的枚举值
+        market_str = "美股" if market == TrdMarket.US else "港股"
+        env_str = "真实" if trade_env == TrdEnv.REAL else "模拟"
         
-        :param trade_env: 交易环境
-        :param market: 交易市场
-        :param timeout: 超时时间（秒）
-        :return: 连接是否成功
-        """
-        result = [False]
-        exception = [None]
+        for attempt in range(max_retries):
+            result = [False]
+            exception = [None]
 
-        def connection_attempt():
-            try:
-                with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
-                    ret, data = trd_ctx.get_acc_list()
-                    if ret == RET_OK:
-                        logger.info(f"Moomoo API connection successful for {market} in {trade_env} mode")
-                        result[0] = True
-                    else:
-                        logger.error(f"Moomoo API connection failed for {market} in {trade_env} mode: {data}")
-            except Exception as e:
-                logger.exception(f"Error testing Moomoo connection for {market} in {trade_env} mode: {str(e)}")
-                exception[0] = e
+            def connection_attempt():
+                try:
+                    with OpenSecTradeContext(host=self.HOST, 
+                                        port=self.PORT, 
+                                        security_firm=self.SECURITY_FIRM, 
+                                        filter_trdmarket=market_obj) as trd_ctx:  # 使用原始枚举值
+                        ret, data = trd_ctx.get_acc_list()
+                        if ret == RET_OK:
+                            # 使用传入的参数值而不是固定值
+                            logger.info(f"Moomoo API connection successful for {market_str} in {env_str} mode")
+                            result[0] = True
+                        else:
+                            logger.error(f"Moomoo API connection failed for {market_str} in {env_str} mode: {data}")
+                except Exception as e:
+                    logger.exception(f"Error testing Moomoo connection: {str(e)}")
+                    exception[0] = e
 
-        thread = threading.Thread(target=connection_attempt)
-        thread.start()
-        thread.join(timeout)
+            thread = threading.Thread(target=connection_attempt)
+            thread.start()
+            thread.join(timeout)
 
-        if thread.is_alive():
-            logger.error(f"Moomoo API connection timed out after {timeout} seconds")
-            self.stop_event.set()
-            thread.join(1)
-            return False
+            if result[0]:
+                return True
 
-        if exception[0]:
-            raise exception[0]
+            if attempt < max_retries - 1:
+                logger.warning(f"Connection attempt {attempt + 1} failed, retrying...")
+                time.sleep(1)
 
-        return result[0]
-
+        return False
+    
     def stop_all_connections(self):
         """停止所有连接"""
         self.stop_event.set()

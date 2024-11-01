@@ -201,13 +201,17 @@ class MainWindow:
     def on_closing(self):
         """处理窗口关闭事件"""
         if messagebox.askokcancel("退出", "确定要退出程序吗？"):
-            # 执行任何必要的清理操作
-            if hasattr(self, 'controller'):
+            try:
                 # 保存配置
-                self.controller.save_config()
-                # 关闭任何打开的连接
-                if hasattr(self.controller, 'api_manager'):
-                    self.controller.api_manager.close_all_connections()
-            
-            # 销毁窗口
-            self.master.destroy()
+                if hasattr(self, 'controller'):
+                    self.controller.save_config()
+                    # 关闭连接
+                    if hasattr(self.controller, 'api_manager'):
+                        self.controller.api_manager.close_all_connections()
+                        logger.info("已关闭所有API连接")
+                
+                # 等待一小段时间确保连接正常关闭
+                self.master.after(100, self.master.destroy)
+            except Exception as e:
+                logger.error(f"关闭程序时发生错误: {str(e)}")
+                self.master.destroy()

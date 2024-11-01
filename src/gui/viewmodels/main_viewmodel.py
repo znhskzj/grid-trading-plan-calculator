@@ -127,13 +127,11 @@ class MainViewModel:
 
     def get_trade_env(self) -> str:
         """获取交易环境（真实/模拟）"""
-        # 这个方法需要根据实际情况实现
-        return "模拟"  # 默认返回模拟环境
+        return getattr(self, 'trade_mode', "模拟")  # 如果未设置则返回默认值
 
     def get_market(self) -> str:
         """获取交易市场（美股/港股）"""
-        # 这个方法需要根据实际情况实现
-        return "美股"  # 默认返回美股市场
+        return getattr(self, 'market', "美股")  # 如果未设置则返回默认值
     
     def update_trade_mode(self, mode: str) -> None:
         """更新交易模式"""

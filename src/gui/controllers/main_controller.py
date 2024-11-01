@@ -24,6 +24,12 @@ class MainController:
         self.api_manager = APIManager()
         self.moomoo_api = self.api_manager.trading_api
 
+        # 添加 Moomoo 连接状态追踪
+        self.moomoo_connected = False
+        self.last_connected_env = None
+        self.last_connected_market = None
+        self.current_acc_id = None
+
         # 初始化设置
         self.initialize_settings()
 
@@ -51,14 +57,35 @@ class MainController:
             logger.warning("No accounts found")
 
     def query_available_funds(self):
-        if not self._validate_account_access():
-            return
-        
-        info = self.moomoo_api.get_account_info(self.current_acc_id, self.trade_env, self.market)
-        if info is not None and not info.empty:
-            self._display_account_info(info)
-        else:
-            self.viewmodel.display_results("无法获取账户信息")
+        try:
+            if not self._validate_account_access():
+                self.viewmodel.display_results("请先完成连接测试并确保账户可访问")
+                return
+            
+            # 获取当前环境和市场设置
+            trade_env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            current_env = TrdEnv.REAL if trade_env_str == "真实" else TrdEnv.SIMULATE
+            current_market = TrdMarket.US if market_str == "美股" else TrdMarket.HK
+
+            info = self.moomoo_api.get_account_info(
+                acc_id=self.current_acc_id,
+                trade_env=current_env,
+                market=current_market
+            )
+            
+            if info is not None:
+                self._display_account_info(info)
+            else:
+                error_msg = "无法获取账户信息"
+                self.viewmodel.display_results(error_msg)
+                self.update_status(error_msg)
+        except Exception as e:
+            error_msg = f"查询账户资金时发生错误: {str(e)}"
+            logger.error(error_msg)
+            self.viewmodel.display_results(error_msg)
+            self.update_status("查询账户资金失败")
 
     def _validate_account_access(self) -> bool:
         if not self.check_moomoo_connection():
@@ -68,47 +95,87 @@ class MainController:
             return False
         return True
 
-    def _display_account_info(self, info: pd.DataFrame):
-        env_str = "真实" if self.trade_env == TrdEnv.REAL else "模拟"
-        market_str = "美股" if self.market == TrdMarket.US else "港股"
-        result = f"当前连接: {market_str}{env_str}账户\n"
-        result += f"账户 {self.current_acc_id} 资金情况:\n"
-        
-        def safe_format(value):
-            try:
-                return f"${float(value):,.2f}" if value != 'N/A' else 'N/A'
-            except ValueError:
-                return str(value)
-        
-        fields = [
-            ("总资产", 'total_assets'),
-            ("现金", 'cash'),
-            ("证券市值", 'securities_assets'),
-            ("购买力", 'power'),
-            ("最大购买力", 'max_power_short'),
-            ("币种", 'currency')
-        ]
-        
-        for label, key in fields:
-            value = safe_format(info[key].values[0])
-            if value != 'N/A' and value != '$N/A':
-                result += f"{label}: {value}\n"
-        
-        self.viewmodel.display_results(result)
-        self.viewmodel.update_status(f"Moomoo API - {market_str}{env_str}账户 - 资金查询完成")
+    def _display_account_info(self, info: Dict[str, Any]):
+        try:
+            env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            result = f"当前连接: {market_str}（{env_str}环境）\n"
+            result += f"账户 {self.current_acc_id} 资金情况:\n\n"
+            
+            def safe_format(value):
+                try:
+                    return f"${float(value):,.2f}" if value != 'N/A' else 'N/A'
+                except (ValueError, TypeError):
+                    return str(value)
+            
+            fields = [
+                ("总资产", 'total_assets'),
+                ("现金", 'cash'),
+                ("证券市值", 'securities_assets'),
+                ("购买力", 'power'),
+                ("最大购买力", 'max_power_short'),
+                ("币种", 'currency')
+            ]
+            
+            for label, key in fields:
+                value = safe_format(info.get(key, 'N/A'))
+                if value != 'N/A' and value != '$N/A':
+                    result += f"{label}: {value}\n"
+            
+            self.viewmodel.display_results(result)
+            self.update_status(f"成功获取{market_str}（{env_str}环境）账户资金信息")
+        except Exception as e:
+            error_msg = f"显示账户信息时发生错误: {str(e)}"
+            logger.error(error_msg)
+            self.viewmodel.display_results(error_msg)
+            self.update_status("显示账户信息失败")
 
     def test_moomoo_connection(self):
         trade_env = self.viewmodel.get_trade_env()
         market = self.viewmodel.get_market()
         try:
+            # 先更新状态，告知用户正在连接
+            connecting_msg = f"正在连接到 Moomoo {market}（{trade_env}环境）..."
+            self.update_status(connecting_msg)
+            self.viewmodel.display_results(f"{connecting_msg}\n请稍候...")
+
             result = self.api_manager.test_moomoo_connection(trade_env, market)
+            
             if result:
-                self.viewmodel.update_status("Moomoo 连接测试成功")
+                success_msg = f"Moomoo {market}（{trade_env}环境）连接测试成功"
+                self.update_status(success_msg)
+                self.viewmodel.display_results(f"{success_msg}\n\n"
+                                            f"当前配置:\n"
+                                            f"- 交易环境: {trade_env}\n"
+                                            f"- 交易市场: {market}\n"
+                                            f"- 连接状态: 成功")
+                self.moomoo_connected = True
+                self.last_connected_env = TrdEnv.REAL if trade_env == "真实" else TrdEnv.SIMULATE
+                self.last_connected_market = TrdMarket.US if market == "美股" else TrdMarket.HK
             else:
-                self.viewmodel.update_status("Moomoo 连接测试失败")
+                error_msg = f"Moomoo {market}（{trade_env}环境）连接测试失败"
+                self.update_status(error_msg)
+                self.viewmodel.display_results(f"{error_msg}\n\n"
+                                            f"可能的原因:\n"
+                                            f"1. Moomoo OpenD 未启动或未响应\n"
+                                            f"2. 网络连接异常\n"
+                                            f"3. API 配置错误\n\n"
+                                            f"建议操作:\n"
+                                            f"1. 启动或重启 OpenD\n"
+                                            f"2. 检查网络连接\n"
+                                            f"3. 确认配置正确")
+                self.moomoo_connected = False
+
         except Exception as e:
-            self.viewmodel.update_status(f"Moomoo 连接测试错误: {str(e)}")
-            logger.error(f"Moomoo 连接测试错误: {str(e)}")
+            error_msg = f"Moomoo连接测试错误: {str(e)}"
+            self.update_status("连接测试失败")
+            self.viewmodel.display_results(f"连接测试过程中发生错误\n\n"
+                                        f"错误信息: {str(e)}\n\n"
+                                        f"正在进行重试...\n"
+                                        f"请确保 OpenD 已启动并正常运行")
+            logger.error(error_msg)
+            self.moomoo_connected = False
     
     @exception_handler
     def run_calculation(self) -> None:
@@ -489,7 +556,7 @@ class MainController:
                 'alpha_vantage_key': current_config.get('API', {}).get('alpha_vantage_key', '')
             },
             'General': {
-                 'allocation_method': int(system_config.get('General', {}).get('default_allocation_method', 1)),
+                'allocation_method': int(system_config.get('General', {}).get('default_allocation_method', 1)),
             },
             'RecentCalculations': {
                 'funds': system_config.get('General', {}).get('default_funds', '10000'),
@@ -503,10 +570,18 @@ class MainController:
         }
 
         self.config_manager.save_user_config(new_config)
-        self.update_ui_from_config(new_config)
-
+        
+        # 更新 UI
+        self.main_window.right_frame.set_default_values(
+            funds=new_config['RecentCalculations']['funds'],
+            initial_price=new_config['RecentCalculations']['initial_price'],
+            stop_loss_price=new_config['RecentCalculations']['stop_loss_price'],
+            num_grids=new_config['RecentCalculations']['num_grids'],
+            allocation_method=new_config['General']['allocation_method']
+        )
+        
         reset_message = "除常用标的和Moomoo设置外,所有设置已重置为默认值"
-        self.viewmodel.update_status(reset_message)
+        self.update_status(reset_message)
         self.viewmodel.display_results(reset_message)
         self._initialize_api_manager()
 
@@ -525,15 +600,23 @@ class MainController:
         # 处理下单结果并更新 ViewModel
 
     def query_positions(self):
-        if not self._validate_account_access():
-            return
-        
-        positions = self.moomoo_api.get_positions(self.current_acc_id, self.trade_env, self.market)
-        if positions is not None and not positions.empty:
-            # 处理持仓信息并更新 ViewModel
-            self._display_positions(positions)
-        else:
-            self.viewmodel.display_results("无法获取持仓信息或没有持仓")
+        try:
+            if not self._validate_account_access():
+                return
+            
+            current_env = TrdEnv.REAL if self.viewmodel.get_trade_env() == "真实" else TrdEnv.SIMULATE
+            current_market = TrdMarket.US if self.viewmodel.get_market() == "美股" else TrdMarket.HK
+            
+            positions = self.moomoo_api.get_positions(self.current_acc_id, current_env, current_market)
+            if positions is not None:
+                self._display_positions(positions)
+            else:
+                self.viewmodel.display_results("无法获取持仓信息或没有持仓")
+        except Exception as e:
+            error_msg = f"查询持仓时发生错误: {str(e)}"
+            logger.error(error_msg)
+            self.viewmodel.display_results(error_msg)
+            self.update_status("查询持仓失败")
 
     def query_history_orders(self):
         if not self._validate_account_access():
@@ -555,21 +638,40 @@ class MainController:
         pass
 
     def check_moomoo_connection(self) -> bool:
-        current_env = TrdEnv.REAL if self.viewmodel.trade_mode == "真实" else TrdEnv.SIMULATE
-        current_market = TrdMarket.US if self.viewmodel.market == "美股" else TrdMarket.HK
+        try:
+            # 确保从 viewmodel 获取最新的设置
+            trade_env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            current_env = TrdEnv.REAL if trade_env_str == "真实" else TrdEnv.SIMULATE
+            current_market = TrdMarket.US if market_str == "美股" else TrdMarket.HK
 
-        if not self.moomoo_connected or self.last_connected_env != current_env or self.last_connected_market != current_market:
-            result = self.moomoo_api.test_moomoo_connection(current_env, current_market)
-            if result:
-                self.moomoo_connected = True
-                self.last_connected_env = current_env
-                self.last_connected_market = current_market
-                return True
-            else:
-                self.main_window.show_warning("未连接", "请先在Moomoo设置中完成测试连接")
-                return False
-        return True
-    
+            if not self.moomoo_connected or self.last_connected_env != current_env or self.last_connected_market != current_market:
+                result = self.moomoo_api.test_moomoo_connection(current_env, current_market)
+                if result:
+                    self.moomoo_connected = True
+                    self.last_connected_env = current_env
+                    self.last_connected_market = current_market
+                    
+                    # 获取账户列表
+                    acc_list = self.moomoo_api.get_acc_list(current_env, current_market)
+                    if acc_list is not None:
+                        if isinstance(acc_list, dict) and 'acc_id' in acc_list:
+                            self.current_acc_id = acc_list['acc_id'].get(0)
+                            return True if self.current_acc_id else False
+                        
+                    self.main_window.show_warning("无法获取账户", "未能获取到账户列表")
+                    return False
+                else:
+                    self.main_window.show_warning("未连接", "请先在Moomoo设置中完成测试连接")
+                    return False
+            return True
+            
+        except Exception as e:
+            logger.error(f"检查Moomoo连接时发生错误: {str(e)}")
+            self.main_window.show_warning("连接错误", f"检查Moomoo连接时发生错误: {str(e)}")
+            return False
+
     def enable_real_time_notifications(self):
         if not self.check_moomoo_connection():
             return

@@ -29,7 +29,9 @@ class RightFrame(tk.Frame):
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
         self.alpha_vantage_key = tk.StringVar()
-        self.force_simulate = False
+        self.force_simulate = True
+        self.trade_mode_var = tk.StringVar(value="模拟")
+        self.market_var = tk.StringVar(value="美股")
         self.available_apis = self.controller.config_manager.get_config('AvailableAPIs', {}).get('apis', '').split(',')
         if not self.available_apis:
             self.available_apis = ["yahoo", "alpha_vantage"] 
@@ -179,21 +181,49 @@ class RightFrame(tk.Frame):
         moomoo_frame = ttk.LabelFrame(parent_frame, text="Moomoo设置")
         moomoo_frame.grid(row=0, column=2, sticky="nsew", padx=(5, 0), pady=5)
 
-        self.real_radio = ttk.Radiobutton(moomoo_frame, text="真实", variable=self.trade_mode_var, value="真实")
+        self.real_radio = ttk.Radiobutton(moomoo_frame, text="真实", 
+                                        variable=self.trade_mode_var, 
+                                        value="真实",
+                                        command=self.on_trade_mode_change)
         self.real_radio.grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(moomoo_frame, text="模拟", variable=self.trade_mode_var, value="模拟").grid(row=0, column=1, sticky="w")
+        ttk.Radiobutton(moomoo_frame, text="模拟", 
+                        variable=self.trade_mode_var, 
+                        value="模拟",
+                        command=self.on_trade_mode_change).grid(row=0, column=1, sticky="w")
 
-        ttk.Radiobutton(moomoo_frame, text="美股", variable=self.market_var, value="美股").grid(row=1, column=0, sticky="w")
-        ttk.Radiobutton(moomoo_frame, text="港股", variable=self.market_var, value="港股").grid(row=1, column=1, sticky="w")
+        ttk.Radiobutton(moomoo_frame, text="美股", 
+                        variable=self.market_var, 
+                        value="美股",
+                        command=self.on_market_change).grid(row=1, column=0, sticky="w")
+        ttk.Radiobutton(moomoo_frame, text="港股", 
+                        variable=self.market_var, 
+                        value="港股",
+                        command=self.on_market_change).grid(row=1, column=1, sticky="w")
 
-        ttk.Button(moomoo_frame, text="测试连接", command=self.controller.test_moomoo_connection).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-        ttk.Button(moomoo_frame, text="切换强制模拟模式", command=self.toggle_force_simulate).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        ttk.Button(moomoo_frame, text="测试连接", 
+                command=self.controller.test_moomoo_connection).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        ttk.Button(moomoo_frame, text="切换强制模拟模式", 
+                command=self.toggle_force_simulate).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         self.update_moomoo_settings_state()
+
+    def on_trade_mode_change(self):
+        mode = self.trade_mode_var.get()
+        self.controller.viewmodel.update_trade_mode(mode)
+        self.controller.update_status(f"已切换到{mode}交易模式")
+        # 重置连接状态，确保下次需要重新验证连接
+        self.controller.moomoo_connected = False
+
+    def on_market_change(self):
+        market = self.market_var.get()
+        self.controller.viewmodel.market = market
+        self.controller.update_status(f"已切换到{market}市场")
 
     def update_moomoo_settings_state(self) -> None:
         if self.force_simulate:
             self.real_radio.config(state="disabled")
             self.trade_mode_var.set("模拟")
+            # 通知控制器更新交易模式
+            self.controller.viewmodel.update_trade_mode("模拟")
         else:
             self.real_radio.config(state="normal")
 
