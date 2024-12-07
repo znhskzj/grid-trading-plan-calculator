@@ -13,6 +13,8 @@ logger = setup_logger('api_manager')
 class APIManager:
     def __init__(self):
         self.config_manager = ConfigManager()
+        moomoo_config = self.config_manager.get_config('MoomooAPI', {})
+        self.trading_api = MoomooAdapter(config=moomoo_config)  # 使用关键字参数
         self.api_config = self.config_manager.get_api_config()
         self.current_price_api = self.api_config.get('choice', 'yahoo')
         

@@ -22,8 +22,13 @@ class ResultFrame(tk.Frame):
         self.grid_columnconfigure(0, weight=1)
 
     def create_widgets(self):
+        """创建组件"""
+        # 创建文本框，设置初始状态为禁用
         self.result_text = tk.Text(self, wrap=tk.WORD, height=15)
+        self.result_text.config(state=tk.DISABLED)  # 初始设置为只读
         self.result_text.grid(row=0, column=0, sticky="nsew")
+        
+        # 创建滚动条
         scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.result_text.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.result_text.configure(yscrollcommand=scrollbar.set)
@@ -37,18 +42,29 @@ class ResultFrame(tk.Frame):
         self.result_text.configure(yscrollcommand=scrollbar.set)
     
     def display_results(self, result: str) -> None:
+        """显示结果到文本框"""
         logger.debug(f"显示结果: {result[:100]}...")  # 只记录前100个字符，避免过多日志
-        
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, result)
-        self.result_text.see("1.0")  # 滚动到顶部
-        
-        self.update()
-        self.result_text.update()
-        
-        # 更新状态栏
-        first_line = result.split('\n')[0] if result else "无结果"
-        self.controller.update_status(first_line)
+        try:
+            # 设置为可编辑状态
+            self.result_text.config(state=tk.NORMAL)
+            # 清除现有内容
+            self.result_text.delete(1.0, tk.END)
+            # 插入新内容
+            self.result_text.insert(tk.END, result)
+            # 设置回只读状态
+            self.result_text.config(state=tk.DISABLED)
+            # 滚动到顶部
+            self.result_text.see("1.0")
+            # 强制更新UI
+            self.result_text.update()
+            self.update()
+            # 更新状态栏
+            first_line = result.split('\n')[0] if result else "无结果"
+            self.controller.update_status(first_line)
+            
+        except Exception as e:
+            logger.error(f"显示结果时发生错误: {str(e)}")
+            self.controller.update_status(f"显示结果失败: {str(e)}")
         
     def _format_result_lines(self, lines: List[str]) -> List[str]:
         logger.debug(f"格式化结果行的输入: {lines}")

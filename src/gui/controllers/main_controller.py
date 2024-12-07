@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 from tkinter import messagebox, simpledialog
 import tkinter as tk
+import time
 from typing import Dict, Any, List, Tuple, Optional
 from src.utils.error_handler import APIError, TradingLogicError, InputValidationError
 from src.utils.gui_helpers import exception_handler
@@ -29,6 +30,7 @@ class MainController:
         self.last_connected_env = None
         self.last_connected_market = None
         self.current_acc_id = None
+        self.connection_thread = []
 
         # 初始化设置
         self.initialize_settings()
@@ -56,127 +58,72 @@ class MainController:
             self.current_acc_id = None
             logger.warning("No accounts found")
 
-    def query_available_funds(self):
-        try:
-            if not self._validate_account_access():
-                self.viewmodel.display_results("请先完成连接测试并确保账户可访问")
-                return
-            
-            # 获取当前环境和市场设置
-            trade_env_str = self.viewmodel.get_trade_env()
-            market_str = self.viewmodel.get_market()
-            
-            current_env = TrdEnv.REAL if trade_env_str == "真实" else TrdEnv.SIMULATE
-            current_market = TrdMarket.US if market_str == "美股" else TrdMarket.HK
-
-            info = self.moomoo_api.get_account_info(
-                acc_id=self.current_acc_id,
-                trade_env=current_env,
-                market=current_market
-            )
-            
-            if info is not None:
-                self._display_account_info(info)
-            else:
-                error_msg = "无法获取账户信息"
-                self.viewmodel.display_results(error_msg)
-                self.update_status(error_msg)
-        except Exception as e:
-            error_msg = f"查询账户资金时发生错误: {str(e)}"
-            logger.error(error_msg)
-            self.viewmodel.display_results(error_msg)
-            self.update_status("查询账户资金失败")
-
     def _validate_account_access(self) -> bool:
         if not self.check_moomoo_connection():
             return False
         if self.current_acc_id is None:
-            self.viewmodel.display_results("无法获取账户信息")
+            self.show_calculation_result("无法获取账户信息")
             return False
         return True
 
-    def _display_account_info(self, info: Dict[str, Any]):
-        try:
-            env_str = self.viewmodel.get_trade_env()
-            market_str = self.viewmodel.get_market()
-            
-            result = f"当前连接: {market_str}（{env_str}环境）\n"
-            result += f"账户 {self.current_acc_id} 资金情况:\n\n"
-            
-            def safe_format(value):
-                try:
-                    return f"${float(value):,.2f}" if value != 'N/A' else 'N/A'
-                except (ValueError, TypeError):
-                    return str(value)
-            
-            fields = [
-                ("总资产", 'total_assets'),
-                ("现金", 'cash'),
-                ("证券市值", 'securities_assets'),
-                ("购买力", 'power'),
-                ("最大购买力", 'max_power_short'),
-                ("币种", 'currency')
-            ]
-            
-            for label, key in fields:
-                value = safe_format(info.get(key, 'N/A'))
-                if value != 'N/A' and value != '$N/A':
-                    result += f"{label}: {value}\n"
-            
-            self.viewmodel.display_results(result)
-            self.update_status(f"成功获取{market_str}（{env_str}环境）账户资金信息")
-        except Exception as e:
-            error_msg = f"显示账户信息时发生错误: {str(e)}"
-            logger.error(error_msg)
-            self.viewmodel.display_results(error_msg)
-            self.update_status("显示账户信息失败")
-
     def test_moomoo_connection(self):
-        trade_env = self.viewmodel.get_trade_env()
-        market = self.viewmodel.get_market()
-        try:
-            # 先更新状态，告知用户正在连接
-            connecting_msg = f"正在连接到 Moomoo {market}（{trade_env}环境）..."
-            self.update_status(connecting_msg)
-            self.viewmodel.display_results(f"{connecting_msg}\n请稍候...")
+        trade_env = TrdEnv.REAL if self.viewmodel.get_trade_env() == "真实" else TrdEnv.SIMULATE
+        market = TrdMarket.US if self.viewmodel.get_market() == "美股" else TrdMarket.HK
 
-            result = self.api_manager.test_moomoo_connection(trade_env, market)
+        try:
+            env_str = "真实" if trade_env == TrdEnv.REAL else "模拟"
+            market_str = "美股" if market == TrdMarket.US else "港股"
+            
+            connecting_msg = f"正在连接到 {market_str}（{env_str}环境）..."
+            self.update_status(connecting_msg)
+            self.show_calculation_result(f"{connecting_msg}\n请稍候...")
+
+            result = self.moomoo_api.test_moomoo_connection(trade_env, market)
             
             if result:
-                success_msg = f"Moomoo {market}（{trade_env}环境）连接测试成功"
-                self.update_status(success_msg)
-                self.viewmodel.display_results(f"{success_msg}\n\n"
-                                            f"当前配置:\n"
-                                            f"- 交易环境: {trade_env}\n"
-                                            f"- 交易市场: {market}\n"
-                                            f"- 连接状态: 成功")
                 self.moomoo_connected = True
-                self.last_connected_env = TrdEnv.REAL if trade_env == "真实" else TrdEnv.SIMULATE
-                self.last_connected_market = TrdMarket.US if market == "美股" else TrdMarket.HK
+                self.last_connected_env = trade_env
+                self.last_connected_market = market
+                success_msg = f"{market_str}（{env_str}环境）连接测试成功"
+                self.update_status(success_msg)
+                self.show_calculation_result(success_msg)
+                self.get_current_account()
             else:
-                error_msg = f"Moomoo {market}（{trade_env}环境）连接测试失败"
-                self.update_status(error_msg)
-                self.viewmodel.display_results(f"{error_msg}\n\n"
-                                            f"可能的原因:\n"
-                                            f"1. Moomoo OpenD 未启动或未响应\n"
-                                            f"2. 网络连接异常\n"
-                                            f"3. API 配置错误\n\n"
-                                            f"建议操作:\n"
-                                            f"1. 启动或重启 OpenD\n"
-                                            f"2. 检查网络连接\n"
-                                            f"3. 确认配置正确")
                 self.moomoo_connected = False
+                error_msg = f"{market_str}（{env_str}环境）连接测试失败"
+                self.update_status(error_msg)
+                self.show_calculation_result(f"{error_msg}\n\n"
+                                        f"可能的原因:\n"
+                                        f"1. Moomoo OpenD 未启动或未响应\n"
+                                        f"2. 网络连接异常\n"
+                                        f"3. API 配置错误\n\n"
+                                        f"建议操作:\n"
+                                        f"1. 检查并启动 OpenD\n"
+                                        f"2. 检查网络连接\n"
+                                        f"3. 确认配置正确")
 
         except Exception as e:
-            error_msg = f"Moomoo连接测试错误: {str(e)}"
-            self.update_status("连接测试失败")
-            self.viewmodel.display_results(f"连接测试过程中发生错误\n\n"
-                                        f"错误信息: {str(e)}\n\n"
-                                        f"正在进行重试...\n"
-                                        f"请确保 OpenD 已启动并正常运行")
-            logger.error(error_msg)
             self.moomoo_connected = False
+            error_msg = f"连接测试错误: {str(e)}"
+            self.update_status("连接测试失败")
+            self.show_calculation_result(f"连接测试失败\n\n错误信息: {str(e)}")
+            logger.error(error_msg)
     
+    def on_closing(self):
+        """执行控制器的清理工作"""
+        logger.info("开始清理控制器资源...")
+        try:
+            # 设置停止标志
+            if hasattr(self, 'moomoo_api'):
+                self.moomoo_api.stop_all_connections()
+            
+            # 保存配置
+            self.save_config()
+            
+            logger.info("控制器资源清理完成")
+        except Exception as e:
+            logger.error(f"控制器清理过程中发生错误: {str(e)}")
+
     @exception_handler
     def run_calculation(self) -> None:
         error_message = self.viewmodel.validate_inputs()
@@ -202,7 +149,7 @@ class MainController:
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
             result += calculation_result
             
-            self.display_results(result)
+            self.show_calculation_result(result)
             
             # 更新状态栏消息
             allocation_methods = {
@@ -220,7 +167,7 @@ class MainController:
             error_message = str(e)
             logger.error(f"计算过程中发生错误: {error_message}")
             messagebox.showerror("计算错误", error_message)
-            self.viewmodel.display_results(f"计算失败: {error_message}")
+            self.show_calculation_result(f"计算失败: {error_message}")
             self.viewmodel.update_status("计算失败")
 
     @exception_handler
@@ -254,7 +201,7 @@ class MainController:
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary, reserved_funds)
             result += calculation_result
             
-            self.display_results(result)
+            self.show_calculation_result(result)
             
             # 更新状态栏消息，包含分配方式和标的信息
             allocation_methods = {
@@ -273,20 +220,9 @@ class MainController:
             error_message = str(e)
             logger.error(f"计算过程中发生错误: {error_message}")
             messagebox.showerror("计算错误", error_message)
-            self.viewmodel.display_results(f"计算失败: {error_message}")
+            self.show_calculation_result(f"计算失败: {error_message}")
             self.viewmodel.update_status("计算失败")
             
-    def _calculate_without_stock(self):
-        """在没有设置股票代码的情况下进行计算"""
-        input_values = self.viewmodel.get_input_values()
-        result = "注意：未设置股票代码，使用当前输入值进行计算\n\n"
-        result += self._prepare_result_header()
-        buy_plan, warning_message, summary = self.trading_logic.calculate_buy_plan(**input_values)
-        calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
-        result += calculation_result
-        self.viewmodel.display_results(result)
-        self.viewmodel.update_status("计算完成（无股票代码）")
-    
     def _validate_inputs(self) -> None:
         """验证输入值"""
         error_message = self.viewmodel.validate_inputs()
@@ -338,9 +274,9 @@ class MainController:
             })
             
         except APIError as e:
-            self._handle_api_error(str(e), symbol)
+            self._handle_price_query_error(str(e), symbol)
         except Exception as e:
-            self._handle_api_error(f"获取股票价格时发生未知错误: {str(e)}", symbol)
+            self._handle_price_query_error(f"获取股票价格时发生未知错误: {str(e)}", symbol)
 
     def _update_price_fields(self, symbol: str, current_price: float, api_used: str) -> None:
         if not current_price:
@@ -362,17 +298,33 @@ class MainController:
             f"止损价格: {stop_loss_price:.2f} 元 (按90%当前价格计算)\n\n"
             f"初始价格和止损价格已更新。您可以直接点击\"计算购买计划\"按钮或调整其他参数。"
         )
-        self.viewmodel.display_results(result_message)
+        self.show_calculation_result(result_message)
 
-    def _handle_api_error(self, error_message: str, symbol: str) -> None:
-        """处理API错误"""
+    def _handle_price_query_error(self, error_message: str, symbol: str) -> None:
+        """处理股票价格查询相关的API错误"""
         full_error_message = (f"无法获取标的 {symbol} 的价格\n\n"
-                              f"错误信息: {error_message}\n\n"
-                              f"建议检查网络连接、API key 是否有效，或尝试切换到其他 API。")
-        self.viewmodel.update_status(error_message)
-        self.viewmodel.display_results(full_error_message)
+                            f"错误信息: {error_message}\n\n"
+                            f"建议检查网络连接、API key 是否有效，或尝试切换到其他 API。")
+        self.update_status(error_message)
+        self.show_calculation_result(full_error_message)
         logger.error(error_message)
         self.viewmodel.current_symbol = symbol  # 即使获取价格失败，也设置当前标的
+
+    def _handle_trading_error(self, error_message: str, operation: str, show_details: bool = True) -> None:
+        """统一的交易相关错误处理
+        
+        Args:
+            error_message: 错误信息
+            operation: 操作类型描述
+            show_details: 是否显示详细错误信息
+        """
+        full_error_message = f"{operation}时发生错误: {error_message}"
+        if show_details:
+            full_error_message += "\n\n建议检查:\n1. 网络连接\n2. API状态\n3. 账户权限"
+            
+        logger.error(full_error_message)
+        self.show_calculation_result(full_error_message)
+        self.update_status(f"{operation}失败")
 
     def _initialize_api_manager(self) -> None:
         """初始化API管理器"""
@@ -406,12 +358,6 @@ class MainController:
         
         return result
 
-    def _handle_calculation_error(self, error_message: str) -> None:
-        """处理计算过程中的错误"""
-        logger.error(error_message)
-        self.viewmodel.display_results(error_message)
-        self.viewmodel.update_status("计算失败")
-
     def update_api_choice(self, api_choice: str) -> None:
         """更新API选择"""
         self.viewmodel.update_api_choice(api_choice)
@@ -420,8 +366,8 @@ class MainController:
     def reset_calculation(self) -> None:
         """重置计算"""
         self.viewmodel.reset()
-        self.viewmodel.update_status("计算已重置")
-        self.viewmodel.display_results("所有输入已清除。请输入新的参数。")
+        self.update_status("计算已重置")
+        self.show_calculation_result("所有输入已清除。请输入新的参数。")
 
     def save_config(self):
         """保存配置到配置管理器"""
@@ -486,59 +432,49 @@ class MainController:
 
     def save_to_csv(self):
         try:
-            # 这里实现保存到CSV的逻辑
-            # 可以调用 ResultFrame 中的方法来获取结果并保存
             self.main_window.result_frame.save_to_csv()
-            self.viewmodel.update_status("结果已保存为CSV文件")
+            self.update_status("结果已保存为CSV文件")
         except Exception as e:
-            self.viewmodel.update_status(f"保存CSV文件时发生错误: {str(e)}")
+            self.update_status(f"保存CSV文件时发生错误: {str(e)}")
             logger.error(f"保存CSV文件时发生错误: {str(e)}", exc_info=True)
 
     def update_status(self, message: str) -> None:
-        """更新状态栏信息"""
-        max_length = 100  # 可以根据需要调整
-        if len(message) > max_length:
-            message = message[:max_length] + "..."
+        """更新状态栏和viewmodel的状态信息"""
         try:
-            self.viewmodel.update_status(message)
-            self.main_window.update_status_bar(message)
+            max_length = 100
+            if len(message) > max_length:
+                message = message[:max_length] + "..."
+            
+            # 只更新UI状态栏,不再更新viewmodel
+            if hasattr(self.main_window, 'status_bar'):
+                self.main_window.update_status_bar(message)
+            else:
+                logger.warning("状态栏组件未初始化")
+                
         except Exception as e:
             logger.error(f"更新状态栏时发生错误: {str(e)}")
-            print(f"更新状态栏时发生错误: {str(e)}")  # 为了调试，也打印到控制台
 
-    def display_results(self, result: str) -> None:
-        logger.debug(f"Input result to display_results: {result}")
-        
-        def update_result_text():
-            if not hasattr(self.main_window, 'result_frame'):
-                logger.error("result_frame not found in main_window")
-                return
+    def show_calculation_result(self, result: str) -> None:
+        """显示计算结果到UI并更新ViewModel状态"""
+        try:
+            # 1. 更新 ViewModel 状态
+            self.viewmodel.display_results(result)
             
-            result_text = self.main_window.result_frame.result_text
-            if not result_text:
-                logger.error("result_text widget not found in result_frame")
-                return
-        
-            result_text.config(state=tk.NORMAL)
-            result_text.delete(1.0, tk.END)
-            result_text.insert(tk.END, result)
-            result_text.config(state=tk.DISABLED)
-            result_text.see("1.0")  # 滚动到顶部
+            # 2. 更新 UI
+            def update_ui():
+                if hasattr(self.main_window, 'result_frame'):
+                    if hasattr(self.main_window.result_frame, 'result_text'):
+                        self.main_window.result_frame.display_results(result)
+                        # 更新状态栏
+                        first_line = result.split('\n')[0] if result else "无结果"
+                        self.update_status(first_line)
             
-            self.main_window.result_frame.update()
-            result_text.update()
-            self.main_window.master.update_idletasks()
+            # 在主线程中执行UI更新
+            self.main_window.master.after(0, update_ui)
             
-            logger.debug("Results displayed in result_text widget")
-
-        self.main_window.master.after(0, update_result_text)
-        
-        # 更新状态栏
-        first_line = result.split('\n')[0] if result else "无结果"
-        self.update_status(first_line)
-
-        # 更新 ViewModel
-        self.viewmodel.display_results(result)
+        except Exception as e:
+            logger.error(f"显示计算结果时发生错误: {str(e)}")
+            self.update_status(f"显示结果失败: {str(e)}")
 
     def reset_to_default(self):
         """重置所有设置到默认状态,但保留常用标的和Moomoo设置"""
@@ -582,7 +518,7 @@ class MainController:
         
         reset_message = "除常用标的和Moomoo设置外,所有设置已重置为默认值"
         self.update_status(reset_message)
-        self.viewmodel.display_results(reset_message)
+        self.show_calculation_result(reset_message)
         self._initialize_api_manager()
 
     def update_ui_from_config(self, config):
@@ -599,44 +535,180 @@ class MainController:
         # 使用 self.moomoo_api.place_order 来执行下单
         # 处理下单结果并更新 ViewModel
 
+    def query_available_funds(self):
+        try:
+            if not self._validate_account_access():
+                return
+                
+            current_env = TrdEnv.REAL if self.viewmodel.get_trade_env() == "真实" else TrdEnv.SIMULATE
+            current_market = TrdMarket.US if self.viewmodel.get_market() == "美股" else TrdMarket.HK
+            
+            info = self.moomoo_api.get_account_info(
+                acc_id=self.current_acc_id,
+                trade_env=current_env,
+                market=current_market
+            )
+            
+            if info:
+                self._display_account_info(info)
+            else:
+                self.main_window.result_frame.display_results("无法获取账户资金信息")
+                self.update_status("资金查询失败")
+                
+        except Exception as e:
+            self._handle_trading_error(str(e), "查询账户资金")
+
     def query_positions(self):
         try:
             if not self._validate_account_access():
                 return
-            
+                
             current_env = TrdEnv.REAL if self.viewmodel.get_trade_env() == "真实" else TrdEnv.SIMULATE
             current_market = TrdMarket.US if self.viewmodel.get_market() == "美股" else TrdMarket.HK
             
-            positions = self.moomoo_api.get_positions(self.current_acc_id, current_env, current_market)
-            if positions is not None:
-                self._display_positions(positions)
-            else:
-                self.viewmodel.display_results("无法获取持仓信息或没有持仓")
+            positions = self.moomoo_api.get_positions(
+                acc_id=self.current_acc_id,
+                trade_env=current_env,
+                market=current_market
+            )
+            
+            self._display_positions(positions)
+                
         except Exception as e:
-            error_msg = f"查询持仓时发生错误: {str(e)}"
-            logger.error(error_msg)
-            self.viewmodel.display_results(error_msg)
-            self.update_status("查询持仓失败")
+            self._handle_trading_error(str(e), "查询持仓")
 
     def query_history_orders(self):
-        if not self._validate_account_access():
-            return
-        
-        orders = self.moomoo_api.get_history_orders(self.current_acc_id, self.trade_env, self.market)
-        if orders is not None and not orders.empty:
-            # 处理历史订单信息并更新 ViewModel
+        try:
+            if not self._validate_account_access():
+                return
+                
+            current_env = TrdEnv.REAL if self.viewmodel.get_trade_env() == "真实" else TrdEnv.SIMULATE
+            current_market = TrdMarket.US if self.viewmodel.get_market() == "美股" else TrdMarket.HK
+            
+            orders = self.moomoo_api.get_history_orders(
+                acc_id=self.current_acc_id,
+                trade_env=current_env,
+                market=current_market,
+                include_cancelled=True,
+                days=30
+            )
+            
             self._display_history_orders(orders)
-        else:
-            self.viewmodel.display_results("无法获取历史订单信息或没有历史订单")
+                
+        except Exception as e:
+            self._handle_trading_error(str(e), "查询历史订单")
 
-    def _display_positions(self, positions: pd.DataFrame):
-        # 实现显示持仓信息的逻辑
-        pass
+    def _display_account_info(self, info: Dict[str, Any]) -> None:
+        try:
+            env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            result = f"当前连接: {market_str}（{env_str}环境）\n"
+            result += f"账户 {self.current_acc_id} 资金情况:\n\n"
+            
+            # 格式化金额显示
+            fields = [
+                ("总资产", 'total_assets'),
+                ("现金", 'cash'),
+                ("证券市值", 'securities_assets'),
+                ("购买力", 'power'),
+                ("最大购买力", 'max_power_short'),
+                ("币种", 'currency')
+            ]
+            
+            for label, key in fields:
+                if key in info and info[key] not in ['', 'N/A']:
+                    value = info[key]
+                    if isinstance(value, (int, float)) and key != 'currency':
+                        result += f"{label}: ${value:,.2f}\n"
+                    else:
+                        result += f"{label}: {value}\n"
+            
+            self.show_calculation_result(result)
+            self.update_status(f"成功获取{market_str}（{env_str}环境）账户资金信息")
+        except Exception as e:
+            self._handle_trading_error(str(e), "显示账户信息")
 
-    def _display_history_orders(self, orders: pd.DataFrame):
-        # 实现显示历史订单的逻辑
-        pass
+    def _display_positions(self, positions: Optional[List[Dict[str, Any]]]) -> None:
+        try:
+            env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            result = f"当前连接: {market_str}（{env_str}环境）\n"
+            result += f"账户 {self.current_acc_id} 持仓情况:\n\n"
+            
+            if positions:
+                # 添加表头
+                result += "{:<5}{:<10}{:<12}{:<15}{:<15}{:<15}\n".format(
+                    "序号", "代码", "数量", "市值($)", "成本价", "盈亏比例(%)"
+                )
+                result += "-" * 75 + "\n"
+                
+                # 按市值降序排序
+                sorted_positions = sorted(positions, key=lambda x: float(x.get('market_val', 0)), reverse=True)
+                
+                for i, pos in enumerate(sorted_positions, 1):
+                    result += "{:<5}{:<10}{:<12,.2f}{:<15,.2f}{:<15,.2f}{:<15,.2f}\n".format(
+                        i,
+                        pos.get('code', 'N/A'),
+                        float(pos.get('qty', 0)),
+                        float(pos.get('market_val', 0)),
+                        float(pos.get('cost_price', 0)),
+                        float(pos.get('pl_ratio', 0))
+                    )
+            else:
+                result += "当前账户没有持仓"
+            
+            self.main_window.result_frame.display_results(result)
+            status_message = f"{market_str}（{env_str}环境）{'持仓查询完成' if positions else '无持仓'}"
+            self.update_status(status_message)
+            
+        except Exception as e:
+            self._handle_trading_error(str(e), "显示持仓信息")
 
+    def _display_history_orders(self, orders: Optional[List[Dict[str, Any]]]) -> None:
+        try:
+            env_str = self.viewmodel.get_trade_env()
+            market_str = self.viewmodel.get_market()
+            
+            result = f"当前连接: {market_str}（{env_str}环境）\n"
+            result += f"账户 {self.current_acc_id} 历史订单:\n"
+            result += f"总订单数: {len(orders) if orders else 0}\n"
+            result += "显示最近30天内的订单（最多显示20笔）:\n\n"
+            
+            if orders:
+                result += "{:<5}{:<10}{:<12}{:<15}{:<15}{:<15}\n".format(
+                    "序号", "代码", "方向", "数量", "价格", "创建日期"
+                )
+                result += "-" * 75 + "\n"
+                
+                # 按日期降序排序并限制显示数量
+                sorted_orders = sorted(orders, 
+                                key=lambda x: x.get('create_time', ''), 
+                                reverse=True)[:20]
+                
+                for i, order in enumerate(sorted_orders, 1):
+                    create_time = pd.to_datetime(order.get('create_time', ''))
+                    formatted_date = create_time.strftime('%Y-%m-%d')
+                    
+                    result += "{:<5}{:<10}{:<12}{:<15,.2f}{:<15,.2f}{:<15}\n".format(
+                        i,
+                        order.get('code', 'N/A'),
+                        order.get('trd_side', 'N/A'),
+                        float(order.get('qty', 0)),
+                        float(order.get('price', 0)),
+                        formatted_date
+                    )
+            else:
+                result += "没有历史订单记录"
+            
+            self.main_window.result_frame.display_results(result)
+            status_message = f"{market_str}（{env_str}环境）{'历史订单查询完成' if orders else '无历史订单'}"
+            self.update_status(status_message)
+            
+        except Exception as e:
+            self._handle_trading_error(str(e), "显示历史订单")
+            
     def check_moomoo_connection(self) -> bool:
         try:
             # 确保从 viewmodel 获取最新的设置
@@ -676,7 +748,7 @@ class MainController:
         if not self.check_moomoo_connection():
             return
         message = "实时通知功能需要注册用户并付费开通。\n根据discord群的喊单记录直接调用解析指令并生成购买计划\n请联系作者了解更多信息。"
-        self.viewmodel.display_results(message)
+        self.show_calculation_result(message)
         self.main_window.show_info("实时通知", message)
 
     def process_trading_instruction(self, instruction: str) -> None:
@@ -687,9 +759,9 @@ class MainController:
             self._update_viewmodel_from_instruction(processed_instruction)
             self.run_calculation()
         except TradingLogicError as e:
-            self._handle_calculation_error(str(e))
+            self._handle_trading_error(str(e), "处理交易指令")
         except Exception as e:
-            self._handle_calculation_error(f"处理交易指令时发生错误: {str(e)}")
+            self._handle_trading_error(str(e), "处理交易指令")
 
     def _update_viewmodel_from_instruction(self, processed_instruction: Dict[str, Any]) -> None:
         """根据处理后的指令更新 ViewModel"""

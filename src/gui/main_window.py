@@ -202,16 +202,20 @@ class MainWindow:
         """处理窗口关闭事件"""
         if messagebox.askokcancel("退出", "确定要退出程序吗？"):
             try:
-                # 保存配置
-                if hasattr(self, 'controller'):
-                    self.controller.save_config()
-                    # 关闭连接
-                    if hasattr(self.controller, 'api_manager'):
-                        self.controller.api_manager.close_all_connections()
-                        logger.info("已关闭所有API连接")
+                logger.info("开始关闭程序...")
                 
-                # 等待一小段时间确保连接正常关闭
-                self.master.after(100, self.master.destroy)
+                # 先停止所有API连接
+                if hasattr(self, 'controller'):
+                    if hasattr(self.controller, 'api_manager'):
+                        if hasattr(self.controller.api_manager, 'trading_api'):
+                            self.controller.api_manager.trading_api.stop_all_connections()
+                
+                # 执行其他清理
+                if hasattr(self, 'controller'):
+                    self.controller.on_closing()
+                
+                logger.info("窗口关闭事件处理完成")
+                self.master.destroy()
             except Exception as e:
                 logger.error(f"关闭程序时发生错误: {str(e)}")
                 self.master.destroy()

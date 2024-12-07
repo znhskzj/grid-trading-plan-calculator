@@ -4,6 +4,17 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
 class TradingInterface(ABC):
+    """交易接口基类"""
+    def __init__(self):
+        """基类初始化"""
+        pass
+        
+    def test_moomoo_connection(self, *args, **kwargs):
+        raise NotImplementedError
+        
+    def stop_all_connections(self):
+        raise NotImplementedError
+    
     @abstractmethod
     def get_account_info(self, **kwargs) -> Dict[str, Any]:
         """

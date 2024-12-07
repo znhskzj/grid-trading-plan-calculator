@@ -58,9 +58,9 @@ class MainViewModel:
         # 这里可以添加通知UI更新状态的逻辑
 
     def display_results(self, result: str) -> None:
-        """更新并显示结果"""
-        self.result_message = result
-        logger.info("结果更新")
+        """保存结果到ViewModel的状态中"""
+        self.result_message = result # 保存状态
+        logger.info("结果已更新到ViewModel")
         logger.debug(f"更新的结果: {result}")
         # 这里可以添加通知UI显示结果的逻辑
 

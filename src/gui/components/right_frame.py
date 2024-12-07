@@ -135,10 +135,10 @@ class RightFrame(tk.Frame):
         separator.grid(row=9, column=0, columnspan=2, sticky='ew', pady=5)
 
         second_row_buttons: List[tuple[str, Callable[[], None]]] = [
-            ("查询可用资金", self.controller.query_available_funds),
-            ("查询持仓股票", self.controller.query_positions),
-            ("按标的计划下单", self.controller.place_order_by_plan),
-            ("查询历史订单", self.controller.query_history_orders),
+            ("查询可用资金", self.check_connection_wrapper(self.controller.query_available_funds)),
+            ("查询持仓股票", self.check_connection_wrapper(self.controller.query_positions)),
+            ("按标的计划下单", self.check_connection_wrapper(self.controller.place_order_by_plan)),
+            ("查询历史订单", self.check_connection_wrapper(self.controller.query_history_orders)),
             ("开启实时通知", self.controller.enable_real_time_notifications)
         ]
 
@@ -146,6 +146,17 @@ class RightFrame(tk.Frame):
             btn = ttk.Button(button_frame, text=text, command=command)
             btn.grid(row=1, column=i, padx=2, pady=(5, 0), sticky='ew')
             logger.debug(f"Created second row button: {text}")
+
+    def check_connection_wrapper(self, func: Callable[[], None]) -> Callable[[], None]:
+        """包装需要验证连接的函数"""
+        def wrapper():
+            if not self.controller.moomoo_connected:
+                messagebox.showwarning("未连接", 
+                    "请先在Moomoo设置中完成测试连接。\n"
+                    f"当前设置: {self.market_var.get()}（{self.trade_mode_var.get()}环境）")
+                return
+            func()
+        return wrapper
 
     def get_all_input_values(self) -> Dict[str, Any]:
         return {
@@ -207,16 +218,16 @@ class RightFrame(tk.Frame):
         self.update_moomoo_settings_state()
 
     def on_trade_mode_change(self):
+        self.controller.moomoo_connected = False  # 重置连接状态
         mode = self.trade_mode_var.get()
         self.controller.viewmodel.update_trade_mode(mode)
-        self.controller.update_status(f"已切换到{mode}交易模式")
-        # 重置连接状态，确保下次需要重新验证连接
-        self.controller.moomoo_connected = False
+        self.controller.update_status(f"已切换到{mode}交易模式，请重新测试连接")
 
     def on_market_change(self):
+        self.controller.moomoo_connected = False  # 重置连接状态
         market = self.market_var.get()
         self.controller.viewmodel.market = market
-        self.controller.update_status(f"已切换到{market}市场")
+        self.controller.update_status(f"已切换到{market}市场，请重新测试连接")
 
     def update_moomoo_settings_state(self) -> None:
         if self.force_simulate:

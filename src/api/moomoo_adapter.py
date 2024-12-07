@@ -20,11 +20,19 @@ logger = setup_logger('moomoo_adapter')
 
 class MoomooAdapter(TradingInterface):
     def __init__(self, config=None):
-        self.config = config or self.load_moomoo_config()
+        """
+        初始化 MoomooAdapter
+        :param config: 可选的配置字典
+        """
+        super().__init__()  # 如果有父类的话需要调用
+        self.stop_event = threading.Event()  # 先初始化 stop_event
+        self.connection_thread = None
+        self.trd_ctx = None
+        
+        self.config = config if config is not None else self.load_moomoo_config()
         self.HOST = self.config.get('host', '127.0.0.1')
         self.PORT = int(self.config.get('port', '11111'))
         self.SECURITY_FIRM = getattr(SecurityFirm, self.config.get('security_firm', 'FUTUINC'))
-        self.stop_event = threading.Event()
 
     @staticmethod
     def load_moomoo_config() -> Dict[str, str]:
@@ -53,51 +61,119 @@ class MoomooAdapter(TradingInterface):
         return dict(config['MoomooAPI'])
 
     def test_moomoo_connection(self, trade_env: TrdEnv, market: TrdMarket, timeout: float = 10.0, max_retries: int = 3) -> bool:
-        """
-        测试 Moomoo API 连接，支持重试
-        """
-        # 正确转换市场和环境参数
-        market_obj = market  # 保存原始的枚举值
+        if self.stop_event.is_set():
+            return False
+
         market_str = "美股" if market == TrdMarket.US else "港股"
         env_str = "真实" if trade_env == TrdEnv.REAL else "模拟"
         
+        logger.info(f"开始测试连接 {market_str}（{env_str}环境）...")
+        
         for attempt in range(max_retries):
+            if self.stop_event.is_set():
+                logger.info("收到停止信号，终止连接尝试")
+                return False
+
             result = [False]
-            exception = [None]
+            connection_completed = threading.Event()
 
             def connection_attempt():
                 try:
-                    with OpenSecTradeContext(host=self.HOST, 
-                                        port=self.PORT, 
-                                        security_firm=self.SECURITY_FIRM, 
-                                        filter_trdmarket=market_obj) as trd_ctx:  # 使用原始枚举值
-                        ret, data = trd_ctx.get_acc_list()
-                        if ret == RET_OK:
-                            # 使用传入的参数值而不是固定值
-                            logger.info(f"Moomoo API connection successful for {market_str} in {env_str} mode")
-                            result[0] = True
-                        else:
-                            logger.error(f"Moomoo API connection failed for {market_str} in {env_str} mode: {data}")
+                    self.trd_ctx = OpenSecTradeContext(
+                        host=self.HOST, 
+                        port=self.PORT, 
+                        security_firm=self.SECURITY_FIRM, 
+                        filter_trdmarket=market
+                    )
+                    
+                    if self.stop_event.is_set():
+                        if self.trd_ctx:
+                            self.trd_ctx.close()
+                        return
+
+                    ret, data = self.trd_ctx.get_acc_list()
+                    if ret == RET_OK:
+                        logger.info(f"Moomoo API 连接成功：{market_str}（{env_str}环境）")
+                        result[0] = True
+                    else:
+                        logger.error(f"Moomoo API 连接失败：{market_str}（{env_str}环境）: {data}")
                 except Exception as e:
-                    logger.exception(f"Error testing Moomoo connection: {str(e)}")
-                    exception[0] = e
+                    if not self.stop_event.is_set():
+                        logger.exception(f"测试连接时发生错误：{str(e)}")
+                finally:
+                    if self.trd_ctx:
+                        self.trd_ctx.close()
+                        self.trd_ctx = None
+                    connection_completed.set()
 
-            thread = threading.Thread(target=connection_attempt)
-            thread.start()
-            thread.join(timeout)
+            try:
+                self.connection_thread = threading.Thread(target=connection_attempt)
+                self.connection_thread.daemon = True
+                self.connection_thread.start()
 
-            if result[0]:
-                return True
+                # 等待连接完成或超时
+                if not connection_completed.wait(timeout):
+                    logger.warning(f"连接尝试 {attempt + 1} 超时")
+                    self.stop_event.set()  # 设置停止标志
+                    if self.trd_ctx:
+                        self.trd_ctx.close()
+                        self.trd_ctx = None
+                    if attempt == max_retries - 1:
+                        return False
+                    self.stop_event.clear()  # 重置停止标志准备下一次尝试
+                    continue
 
-            if attempt < max_retries - 1:
-                logger.warning(f"Connection attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)
+                if result[0]:
+                    return True
 
+                if attempt < max_retries - 1:
+                    logger.warning(f"连接尝试 {attempt + 1} 失败，重试...")
+                    time.sleep(1)
+
+            except Exception as e:
+                if not self.stop_event.is_set():
+                    logger.error(f"连接过程发生错误: {str(e)}")
+                if attempt == max_retries - 1:
+                    break
+            finally:
+                if self.connection_thread and self.connection_thread.is_alive():
+                    self.stop_event.set()
+                    if self.trd_ctx:
+                        self.trd_ctx.close()
+                        self.trd_ctx = None
+                    self.connection_thread.join(1)
+
+        logger.error(f"{market_str}（{env_str}环境）连接测试失败，已尝试 {max_retries} 次")
         return False
-    
+
     def stop_all_connections(self):
         """停止所有连接"""
+        logger.info("停止所有Moomoo API连接")
         self.stop_event.set()
+        
+        # 关闭当前的连接上下文
+        if self.trd_ctx:
+            try:
+                self.trd_ctx.close()
+            except:
+                pass
+            self.trd_ctx = None
+        
+        # 等待当前连接线程结束
+        if self.connection_thread and self.connection_thread.is_alive():
+            self.connection_thread.join(2)
+            
+        # 重置状态
+        self.stop_event.clear()
+        self.connection_thread = None
+
+    def __del__(self):
+        """析构函数确保清理"""
+        try:
+            if hasattr(self, 'stop_event') and hasattr(self, 'trd_ctx'):
+                self.stop_all_connections()
+        except:
+            pass  # 析构函数中的异常应该被忽略
 
     def get_acc_list(self, trade_env: TrdEnv, market: TrdMarket) -> Optional[pd.DataFrame]:
         """
@@ -174,7 +250,7 @@ class MoomooAdapter(TradingInterface):
         """
         获取历史订单
         
-        :param kwargs: 包含 acc_id, trade_env, market, include_cancelled, days 的字典
+        :param kwargs: 必须包含 acc_id, trade_env, market，可选 include_cancelled, days
         :return: 历史订单列表
         :raises TradingError: 如果获取历史订单失败
         """
@@ -183,6 +259,9 @@ class MoomooAdapter(TradingInterface):
         market = kwargs.get('market')
         include_cancelled = kwargs.get('include_cancelled', False)
         days = kwargs.get('days', 30)
+
+        if not all([acc_id, trade_env, market]):
+            raise ValueError("Missing required parameters: acc_id, trade_env, market")
 
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
@@ -206,7 +285,6 @@ class MoomooAdapter(TradingInterface):
                 )
                 
                 if ret == RET_OK:
-                    logger.info(f"Successfully retrieved {len(data)} historical orders from {start_date.date()} to {end_date.date()}")
                     return data.to_dict('records')
                 else:
                     raise TradingError(f'查询账户 {acc_id} 历史订单失败：{data}')
@@ -218,13 +296,16 @@ class MoomooAdapter(TradingInterface):
         """
         获取持仓信息
         
-        :param kwargs: 包含 acc_id, trade_env, market 的字典
+        :param kwargs: 必须包含 acc_id, trade_env, market
         :return: 持仓信息列表
         :raises TradingError: 如果获取持仓信息失败
         """
         acc_id = kwargs.get('acc_id')
         trade_env = kwargs.get('trade_env')
         market = kwargs.get('market')
+
+        if not all([acc_id, trade_env, market]):
+            raise ValueError("Missing required parameters: acc_id, trade_env, market")
 
         try:
             with OpenSecTradeContext(host=self.HOST, port=self.PORT, security_firm=self.SECURITY_FIRM, filter_trdmarket=market) as trd_ctx:
