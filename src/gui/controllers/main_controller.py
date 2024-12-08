@@ -84,10 +84,14 @@ class MainController:
                 self.moomoo_connected = True
                 self.last_connected_env = trade_env
                 self.last_connected_market = market
-                success_msg = f"{market_str}（{env_str}环境）连接测试成功"
-                self.update_status(success_msg)
-                self.show_calculation_result(success_msg)
+
+                # 先发起账户获取
                 self.get_current_account()
+                
+                # 然后更新显示
+                success_msg = f"{market_str}（{env_str}环境）连接测试成功"
+                self.show_calculation_result(success_msg)
+                self.update_status(success_msg)
             else:
                 self.moomoo_connected = False
                 error_msg = f"{market_str}（{env_str}环境）连接测试失败"
@@ -136,8 +140,9 @@ class MainController:
         
         try:
             input_values = self.viewmodel.get_input_values()
+            logger.debug(f"获取到的输入值中的分配方式: {input_values.get('allocation_method')}")
             input_values['allocation_method'] = int(input_values['allocation_method'])
-            logger.debug(f"计算使用的输入值: {input_values}")
+            logger.debug(f"转换为整数后的分配方式: {input_values['allocation_method']}")
         
             if not self.viewmodel.current_symbol:
                 logger.warning("股票代码未设置，使用默认值进行计算")
@@ -151,19 +156,27 @@ class MainController:
             
             self.show_calculation_result(result)
             
-            # 更新状态栏消息
+            # 更新状态栏消息并锁定
             allocation_methods = {
                 0: "等金额分配",
                 1: "等比例分配",
                 2: "线性加权"
             }
-            allocation_method = allocation_methods.get(input_values['allocation_method'], "未知")
-            status_message = (f"已按{allocation_method}方式完成购买计划计算"
-                            f"{f' (标的: {self.viewmodel.current_symbol})' if self.viewmodel.current_symbol else ''}")
-            self.update_status(status_message)
+            
+            symbol_info = ""
+            if self.viewmodel.current_symbol and self.viewmodel.current_symbol != "DEFAULT":
+                symbol_info = f" | 标的: {self.viewmodel.current_symbol}"
+            
+            status_message = f"购买计划计算完成 | {allocation_methods.get(input_values['allocation_method'], '未知')}{symbol_info}"
+
+            self.status_locked = False  # 临时解锁
+            self.update_status(status_message)  # 更新状态
+            self.status_locked = True  # 重新锁定
             
             logger.debug(f"计算完成，当前股票代码: {self.viewmodel.current_symbol or '无'}")
-        except (InputValidationError, TradingLogicError, ValueError) as e:
+            
+        except (InputValidationError, TradingLogicError, ValueError, FloatingPointError) as e:
+            self.status_locked = False
             error_message = str(e)
             logger.error(f"计算过程中发生错误: {error_message}")
             messagebox.showerror("计算错误", error_message)
@@ -183,9 +196,9 @@ class MainController:
         
         try:
             input_values = self.viewmodel.get_input_values()
-            
-            # 确保使用默认值
-            input_values = self.trading_logic.ensure_default_values(input_values)
+            logger.debug(f"获取到的输入值中的分配方式: {input_values.get('allocation_method')}")
+            input_values['allocation_method'] = int(input_values['allocation_method'])
+            logger.debug(f"转换为整数后的分配方式: {input_values['allocation_method']}")
             
             # 计算保留资金
             total_funds = input_values['funds']
@@ -203,20 +216,30 @@ class MainController:
             
             self.show_calculation_result(result)
             
-            # 更新状态栏消息，包含分配方式和标的信息
+            # 更新状态栏消息并锁定
+            self.status_locked = True
             allocation_methods = {
                 0: "等金额分配",
                 1: "等比例分配",
                 2: "线性加权"
             }
+            
+            symbol_info = ""
+            if self.viewmodel.current_symbol and self.viewmodel.current_symbol != "DEFAULT":
+                symbol_info = f" | 标的: {self.viewmodel.current_symbol}"
+            
+            # 在计算完成后更新状态
             allocation_method = allocation_methods.get(input_values['allocation_method'], "未知")
-            status_message = (f"已按{allocation_method}方式完成保留{reserve_percentage}%总资金的购买计划计算"
-                            f"{f' (标的: {self.viewmodel.current_symbol})' if self.viewmodel.current_symbol else ''}")
-            self.update_status(status_message)
+            status_message = f"购买计划计算完成 | {allocation_method} | 保留{reserve_percentage}%资金{symbol_info}"
+
+            self.status_locked = False  # 临时解锁
+            self.update_status(status_message)  # 更新状态
+            self.status_locked = True  # 重新锁定
             
             logger.debug(f"计算完成（保留{reserve_percentage}%资金），当前股票代码: {self.viewmodel.current_symbol or '无'}")
                 
-        except (InputValidationError, TradingLogicError, ValueError) as e:
+        except (InputValidationError, TradingLogicError, ValueError, FloatingPointError) as e:
+            self.status_locked = False
             error_message = str(e)
             logger.error(f"计算过程中发生错误: {error_message}")
             messagebox.showerror("计算错误", error_message)
@@ -438,14 +461,23 @@ class MainController:
             self.update_status(f"保存CSV文件时发生错误: {str(e)}")
             logger.error(f"保存CSV文件时发生错误: {str(e)}", exc_info=True)
 
-    def update_status(self, message: str) -> None:
-        """更新状态栏和viewmodel的状态信息"""
+    def update_status(self, message: str, force_update: bool = False) -> None:
+        """
+        更新状态栏和viewmodel的状态信息
+        
+        :param message: 状态消息
+        :param force_update: 是否强制更新状态栏，即使状态被锁定
+        """
         try:
             max_length = 100
             if len(message) > max_length:
                 message = message[:max_length] + "..."
             
-            # 只更新UI状态栏,不再更新viewmodel
+            # 检查状态锁定
+            if hasattr(self, 'status_locked') and self.status_locked and not force_update:
+                logger.debug(f"状态栏已锁定，忽略更新: {message}")
+                return
+                
             if hasattr(self.main_window, 'status_bar'):
                 self.main_window.update_status_bar(message)
             else:
@@ -625,7 +657,7 @@ class MainController:
                         result += f"{label}: {value}\n"
             
             self.show_calculation_result(result)
-            self.update_status(f"成功获取{market_str}（{env_str}环境）账户资金信息")
+            self.update_status(f"{market_str}（{env_str}环境）资金查询完成")
         except Exception as e:
             self._handle_trading_error(str(e), "显示账户信息")
 
@@ -771,3 +803,6 @@ class MainController:
         self.api_manager.switch_price_api(api_choice)
         if api_choice == 'alpha_vantage':
             self.api_manager.set_alpha_vantage_key(api_key)
+
+    def update_force_simulate_mode(self, state: str) -> None:
+        self.update_status(f"已{state}强制模拟模式")

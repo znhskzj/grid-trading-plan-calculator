@@ -4,7 +4,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-def setup_logger(name, log_file='app.log', level=logging.INFO):
+def setup_logger(name, log_file='grid_trading.log', level=logging.DEBUG):
     """设置日志记录器"""
     log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
     os.makedirs(log_dir, exist_ok=True)

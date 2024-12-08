@@ -288,10 +288,9 @@ class RightFrame(tk.Frame):
     def toggle_force_simulate(self) -> None:
         self.force_simulate = not self.force_simulate
         self.update_moomoo_settings_state()
-
-    def connect_controller(self) -> None:
-        # 如果有任何需要直接连接到控制器的方法，可以在这里进行
-        pass
+        # 添加通知 controller 的调用
+        state = "启用" if self.force_simulate else "禁用"
+        self.controller.update_force_simulate_mode(state)
 
     def handle_gui_error(self, message: str, exception: Exception) -> None:
         logger.error(f"{message}: {str(exception)}", exc_info=True)
@@ -336,6 +335,7 @@ class RightFrame(tk.Frame):
         }
         current_method = allocation_methods.get(self.allocation_method_var.get(), "未知")
         current_allocation = int(self.allocation_method_var.get())
+        logger.debug(f"分配方式改变，当前选择值: {current_allocation}")
         
         # 更新 ViewModel
         self.controller.viewmodel.update_calculation_inputs(
@@ -345,10 +345,10 @@ class RightFrame(tk.Frame):
         )
         
         # 保存配置
-        self.controller.save_config()  # 确保调用 controller 的 save_config
+        self.controller.save_config()
         
-        # 更新状态栏
-        self.controller.update_status(f"已切换到{current_method}方式")
+        # 更新状态栏，强制更新
+        self.controller.update_status(f"已切换到{current_method}方式", force_update=True)
 
     def on_num_grids_change(self, *args):
         value = self.num_grids_var.get()

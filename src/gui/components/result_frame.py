@@ -58,14 +58,11 @@ class ResultFrame(tk.Frame):
             # 强制更新UI
             self.result_text.update()
             self.update()
-            # 更新状态栏
-            first_line = result.split('\n')[0] if result else "无结果"
-            self.controller.update_status(first_line)
             
         except Exception as e:
             logger.error(f"显示结果时发生错误: {str(e)}")
-            self.controller.update_status(f"显示结果失败: {str(e)}")
-        
+            self.controller.update_status(f"显示结果失败: {str(e)}", True)  # 错误信息要强制显示
+
     def _format_result_lines(self, lines: List[str]) -> List[str]:
         logger.debug(f"格式化结果行的输入: {lines}")
         formatted_lines = []

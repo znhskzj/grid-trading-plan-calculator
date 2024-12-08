@@ -68,6 +68,7 @@ class TradingLogic:
             raise TradingLogicError(f"网格数量必须大于0且不超过{max_num_grids}")
         
         logger.info("开始执行 calculate_buy_plan 函数")
+        logger.debug(f"进入 calculate_buy_plan，原始分配方式参数: {allocation_method}")
         logger.debug(f"输入参数: funds={funds}, initial_price={initial_price}, stop_loss_price={stop_loss_price}, num_grids={num_grids}, allocation_method={allocation_method}")
 
         # 使用 ensure_default_values 方法来处理默认值
@@ -83,6 +84,7 @@ class TradingLogic:
         stop_loss_price = input_values['stop_loss_price']
         num_grids = input_values['num_grids']
         allocation_method = input_values['allocation_method']
+        logger.debug(f"ensure_default_values 后的分配方式: {input_values['allocation_method']}")
 
         try:
             self.validate_inputs(funds, initial_price, stop_loss_price, num_grids, allocation_method)
@@ -102,7 +104,7 @@ class TradingLogic:
 
         buy_prices: np.ndarray = np.linspace(max_price, min_price, num_grids)
         logger.debug(f"生成的价格网格: {buy_prices}")
-
+        logger.debug(f"调用 calculate_weights 前的分配方式: {allocation_method}")
         buy_quantities: List[int] = self.calculate_weights(buy_prices.tolist(), allocation_method, max_shares)
         logger.debug(f"初始购买数量: {buy_quantities}")
 
@@ -133,7 +135,7 @@ class TradingLogic:
         max_loss = total_cost - (total_shares * stop_loss_price)
         max_loss_percentage = (max_loss / total_cost) * 100 if total_cost > 0 else 0
 
-        
+        logger.debug(f"创建 summary 前的分配方式: {allocation_method}")
         summary = {
             "total_shares": total_shares,
             "total_cost": total_cost,
@@ -173,6 +175,7 @@ class TradingLogic:
         :param max_shares: 最大股数
         :return: 各价格点的股数列表
         """
+        logger.debug(f"进入 calculate_weights，分配方法: {method}")
         logger.debug(f"开始计算权重: 方法={method}, 最大股数={max_shares}, 价格列表={prices}")
 
         if len(prices) == 1:
@@ -186,7 +189,7 @@ class TradingLogic:
         }
 
         weights: List[float] = allocation_methods.get(method, lambda: [])()
-        logger.debug(f"分配方式 {method} 的初始权重: {weights}")
+        logger.debug(f"使用的分配方法 {method} 生成的权重: {weights}")
         
         if not weights:
             logger.error(f"无效的分配方式: {method}")
@@ -380,7 +383,11 @@ class TradingLogic:
         }
         
         for key, default_value in default_values.items():
-            if not input_values.get(key):
-                input_values[key] = default_value
+            if key == 'allocation_method':
+                if input_values.get(key) is None:  # 只在值为 None 时使用默认值
+                    input_values[key] = default_value
+            else:
+                if not input_values.get(key):  # 其他值保持原有的判断逻辑
+                    input_values[key] = default_value
         
         return input_values
