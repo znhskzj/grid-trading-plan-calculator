@@ -51,3 +51,12 @@ class AlphaVantageAdapter(PriceQueryInterface):
                 logger.error("无法导入 alpha_vantage 库。请确保已安装该库。")
                 raise ImportError("alpha_vantage 库未安装。请使用 'pip install alpha_vantage' 安装。")
         return self.ts
+    
+    def close(self) -> None:
+        """关闭连接"""
+        self.ts = None  # 清除 TimeSeries 实例
+
+    @property
+    def name(self) -> str:
+        """获取API名称"""
+        return 'Alpha Vantage'

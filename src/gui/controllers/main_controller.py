@@ -23,7 +23,7 @@ class MainController:
         self.viewmodel = MainViewModel()
         self.trading_logic = TradingLogic(self.config_manager)
         self.api_manager = APIManager()
-        self.moomoo_api = self.api_manager.trading_api
+        self.moomoo_api = self.api_manager.trading.get_current_api()
 
         # 添加 Moomoo 连接状态追踪
         self.moomoo_connected = False
@@ -75,7 +75,7 @@ class MainController:
             market_str = "美股" if market == TrdMarket.US else "港股"
             
             connecting_msg = f"正在连接到 {market_str}（{env_str}环境）..."
-            self.update_status(connecting_msg)
+            self.update_status(connecting_msg, force_update=True)
             self.show_calculation_result(f"{connecting_msg}\n请稍候...")
 
             result = self.moomoo_api.test_moomoo_connection(trade_env, market)
@@ -91,11 +91,12 @@ class MainController:
                 # 然后更新显示
                 success_msg = f"{market_str}（{env_str}环境）连接测试成功"
                 self.show_calculation_result(success_msg)
-                self.update_status(success_msg)
+                self.update_status(success_msg, force_update=True)
             else:
                 self.moomoo_connected = False
                 error_msg = f"{market_str}（{env_str}环境）连接测试失败"
-                self.update_status(error_msg)
+                # 更新状态栏显示失败信息
+                self.update_status(error_msg, force_update=True)
                 self.show_calculation_result(f"{error_msg}\n\n"
                                         f"可能的原因:\n"
                                         f"1. Moomoo OpenD 未启动或未响应\n"
@@ -105,13 +106,18 @@ class MainController:
                                         f"1. 检查并启动 OpenD\n"
                                         f"2. 检查网络连接\n"
                                         f"3. 确认配置正确")
+                
+                # 尝试清理连接
+                self.moomoo_api.stop_all_connections()
 
         except Exception as e:
             self.moomoo_connected = False
             error_msg = f"连接测试错误: {str(e)}"
-            self.update_status("连接测试失败")
+            self.update_status("连接测试失败", force_update=True)
             self.show_calculation_result(f"连接测试失败\n\n错误信息: {str(e)}")
             logger.error(error_msg)
+            # 发生异常时也尝试清理连接
+            self.moomoo_api.stop_all_connections()
     
     def on_closing(self):
         """执行控制器的清理工作"""
@@ -139,6 +145,22 @@ class MainController:
         logger.info("开始运行计算...")
         
         try:
+            # 首先检查是否有交易指令
+            instruction = self.viewmodel.get_instruction()
+            if instruction and instruction != "例：SOXL现价到37.5之间分批买，压力39+，止损36.8":
+                logger.info(f"检测到交易指令: {instruction}")
+                self.update_status("正在解析交易指令...", force_update=True)
+                try:
+                    current_price = None
+                    if self.viewmodel.current_symbol:
+                        current_price = self.api_manager.get_stock_price(self.viewmodel.current_symbol)[0]
+                    processed_instruction = self.trading_logic.process_instruction(instruction, current_price)
+                    self._update_viewmodel_from_instruction(processed_instruction)
+                except Exception as e:
+                    logger.error(f"解析交易指令失败: {str(e)}")
+                    messagebox.showerror("指令解析错误", str(e))
+                    return
+
             input_values = self.viewmodel.get_input_values()
             logger.debug(f"获取到的输入值中的分配方式: {input_values.get('allocation_method')}")
             input_values['allocation_method'] = int(input_values['allocation_method'])
@@ -153,6 +175,13 @@ class MainController:
             
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary)
             result += calculation_result
+            
+            # 保存计算结果用于下单
+            self.last_calculation_result = {
+                'buy_plan': buy_plan,
+                'total_cost': summary.get('total_cost', 0),
+                'total_shares': summary.get('total_shares', 0)
+            }
             
             self.show_calculation_result(result)
             
@@ -195,6 +224,22 @@ class MainController:
         logger.info(f"开始计算（保留{reserve_percentage}%资金）...")
         
         try:
+            # 首先检查是否有交易指令
+            instruction = self.viewmodel.get_instruction()
+            if instruction and instruction != "例：SOXL现价到37.5之间分批买，压力39+，止损36.8":
+                logger.info(f"检测到交易指令: {instruction}")
+                self.update_status("正在解析交易指令...", force_update=True)
+                try:
+                    current_price = None
+                    if self.viewmodel.current_symbol:
+                        current_price = self.api_manager.get_stock_price(self.viewmodel.current_symbol)[0]
+                    processed_instruction = self.trading_logic.process_instruction(instruction, current_price)
+                    self._update_viewmodel_from_instruction(processed_instruction)
+                except Exception as e:
+                    logger.error(f"解析交易指令失败: {str(e)}")
+                    messagebox.showerror("指令解析错误", str(e))
+                    return
+
             input_values = self.viewmodel.get_input_values()
             logger.debug(f"获取到的输入值中的分配方式: {input_values.get('allocation_method')}")
             input_values['allocation_method'] = int(input_values['allocation_method'])
@@ -214,10 +259,16 @@ class MainController:
             calculation_result = self._format_buy_plan(buy_plan, warning_message, summary, reserved_funds)
             result += calculation_result
             
+            # 保存计算结果用于下单
+            self.last_calculation_result = {
+                'buy_plan': buy_plan,
+                'total_cost': summary.get('total_cost', 0),
+                'total_shares': summary.get('total_shares', 0)
+            }
+            
             self.show_calculation_result(result)
             
             # 更新状态栏消息并锁定
-            self.status_locked = True
             allocation_methods = {
                 0: "等金额分配",
                 1: "等比例分配",
@@ -229,7 +280,7 @@ class MainController:
                 symbol_info = f" | 标的: {self.viewmodel.current_symbol}"
             
             # 在计算完成后更新状态
-            allocation_method = allocation_methods.get(input_values['allocation_method'], "未知")
+            allocation_method = allocation_methods.get(input_values['allocation_method'], '未知')
             status_message = f"购买计划计算完成 | {allocation_method} | 保留{reserve_percentage}%资金{symbol_info}"
 
             self.status_locked = False  # 临时解锁
@@ -281,13 +332,22 @@ class MainController:
         return result
 
     def set_stock_price(self, symbol: str) -> None:
-        logger.info(f"设置股票价格，标的: {symbol}")
+        logger.info(f"开始设置股票价格，标的: {symbol}")
+        
+        # 立即更新状态栏和用户提示区
+        status_msg = f"正在查询 {symbol} 的实时价格..."
+        self.update_status(status_msg, force_update=True)
+        self.show_calculation_result(f"{status_msg}\n\n正在从 {self.viewmodel.api_choice} 获取最新价格，请稍候...")
+        
+        # 强制更新UI
+        self.main_window.master.update()
+        
         if self.viewmodel.api_choice != self.api_manager.current_price_api:
             self._initialize_api_manager()
 
         try:
             current_price, api_used = self.api_manager.get_stock_price(symbol)
-            current_price = round(current_price, 2)  # 将当前价格四舍五入到2位小数
+            current_price = round(current_price, 2)
             self._update_price_fields(symbol, current_price, api_used)
             
             # 确保更新 UI
@@ -563,9 +623,45 @@ class MainController:
         if not self._validate_account_access():
             return
         
-        # 实现按计划下单的逻辑
-        # 使用 self.moomoo_api.place_order 来执行下单
-        # 处理下单结果并更新 ViewModel
+        if not hasattr(self, 'last_calculation_result') or not self.last_calculation_result:
+            messagebox.showwarning("提示", "请先计算购买计划")
+            return
+            
+        try:
+            self.update_status("正在执行购买计划...", force_update=True)
+            
+            plan = self.last_calculation_result.get('buy_plan', [])
+            if not plan:
+                messagebox.showwarning("提示", "没有可执行的购买计划")
+                return
+                
+            # 显示确认对话框
+            result = messagebox.askyesno("确认下单", 
+                f"是否确认按照计划下单？\n"
+                f"标的: {self.viewmodel.current_symbol}\n"
+                f"总价格: {self.last_calculation_result.get('total_cost', 0):.2f}\n"
+                f"总数量: {self.last_calculation_result.get('total_shares', 0)}")
+                
+            if result:
+                # 执行下单逻辑
+                for price, quantity in plan:
+                    order_result = self.moomoo_api.place_order(
+                        self.current_acc_id,
+                        self.viewmodel.current_symbol,
+                        quantity,
+                        price
+                    )
+                    # 处理下单结果...
+                    
+                self.update_status("下单完成", force_update=True)
+            else:
+                self.update_status("已取消下单", force_update=True)
+                
+        except Exception as e:
+            error_msg = f"下单执行失败: {str(e)}"
+            logger.error(error_msg)
+            messagebox.showerror("错误", error_msg)
+            self.update_status("下单失败", force_update=True)
 
     def query_available_funds(self):
         try:

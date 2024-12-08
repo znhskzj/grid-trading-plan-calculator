@@ -29,3 +29,12 @@ class YahooFinanceAdapter(PriceQueryInterface):
         except Exception as e:
             logger.error(f"从Yahoo Finance获取价格时发生错误: {str(e)}")
             raise PriceQueryError(f"Yahoo Finance 无法获取 {symbol} 的价格: {str(e)}")
+        
+    def close(self) -> None:
+        """关闭连接"""
+        pass  # Yahoo Finance 不需要特别的清理
+
+    @property
+    def name(self) -> str:
+        """获取API名称"""
+        return 'Yahoo Finance'

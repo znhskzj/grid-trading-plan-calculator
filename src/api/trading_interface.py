@@ -9,11 +9,18 @@ class TradingInterface(ABC):
         """基类初始化"""
         pass
         
+    @abstractmethod
     def test_moomoo_connection(self, *args, **kwargs):
-        raise NotImplementedError
-        
+        pass
+
+    @abstractmethod
     def stop_all_connections(self):
-        raise NotImplementedError
+        pass
+
+    @abstractmethod
+    def close(self):
+        """关闭连接并清理资源"""
+        pass
     
     @abstractmethod
     def get_account_info(self, **kwargs) -> Dict[str, Any]:

@@ -15,7 +15,8 @@ class MainViewModel:
         self.total_investment: float = 50000.0
         self.grid_levels: int = 5
         self.allocation_method: int = 1
-        
+        self.instruction: str = "" 
+
         self.api_choice: str = "yahoo"
         self.current_symbol: str = ""
         self.status_message: str = ""
@@ -114,9 +115,11 @@ class MainViewModel:
         }
     
     def update_calculation_inputs(self, **kwargs):
+        """更新计算输入值"""
         for key, value in kwargs.items():
-            setattr(self, key, value)
-        logger.debug(f"ViewModel 更新: {kwargs}")  # 添加日志
+            if hasattr(self, key):
+                setattr(self, key, value)
+        logger.debug(f"ViewModel 更新: {kwargs}")
 
     def bulk_update(self, data: Dict[str, Any]) -> None:
         """批量更新多个字段"""
@@ -172,3 +175,21 @@ class MainViewModel:
     def update_allocation_method(self, method: int):
         self.allocation_method = method
         logger.debug(f"分配方法更新为: {method}")
+
+    def get_instruction(self) -> str:
+        """单独获取交易指令"""
+        return getattr(self, 'instruction', '')
+
+    def set_instruction(self, instruction: str) -> None:
+        """设置交易指令"""
+        self.instruction = instruction
+        logger.debug(f"交易指令已更新: {instruction}")
+
+    def get_input_values(self) -> Dict[str, Any]:
+        return {
+            "funds": self.total_investment,
+            "initial_price": self.current_price,
+            "stop_loss_price": self.stop_loss_price,
+            "num_grids": self.grid_levels,
+            "allocation_method": self.allocation_method
+        }

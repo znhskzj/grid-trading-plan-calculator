@@ -357,3 +357,14 @@ class RightFrame(tk.Frame):
             self.error_label.config(text=error)
         else:
             self.error_label.config(text="")
+
+    def on_instruction_change(self, *args):
+        """当指令输入发生变化时调用"""
+        instruction = self.instruction_var.get()
+        if instruction != "例：SOXL现价到37.5之间分批买，压力39+，止损36.8":
+            self.controller.viewmodel.set_instruction(instruction)
+        else:
+            self.controller.viewmodel.set_instruction("")
+
+        # 在创建指令输入框后绑定变化事件
+        self.instruction_var.trace_add("write", self.on_instruction_change)

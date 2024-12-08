@@ -155,17 +155,26 @@ class MoomooAdapter(TradingInterface):
         if self.trd_ctx:
             try:
                 self.trd_ctx.close()
-            except:
-                pass
-            self.trd_ctx = None
+                logger.debug("交易上下文关闭成功")
+            except Exception as e:
+                logger.error(f"关闭交易上下文时发生错误: {str(e)}")
+            finally:
+                self.trd_ctx = None
         
-        # 等待当前连接线程结束
+        # 等待当前连接线程结束，设置更长的超时时间
         if self.connection_thread and self.connection_thread.is_alive():
-            self.connection_thread.join(2)
-            
+            try:
+                # 增加等待时间到5秒，避免过早超时
+                self.connection_thread.join(5)
+                if self.connection_thread.is_alive():
+                    logger.warning("连接线程未能在预定时间内结束")
+            except Exception as e:
+                logger.error(f"等待连接线程结束时发生错误: {str(e)}")
+                
         # 重置状态
         self.stop_event.clear()
         self.connection_thread = None
+        logger.info("所有连接已清理完成")
 
     def __del__(self):
         """析构函数确保清理"""
