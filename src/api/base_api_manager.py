@@ -1,9 +1,9 @@
 # src/api/base_api_manager.py
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from api.alpha_vantage_adapter import AlphaVantageAdapter
 from src.config.config_manager import ConfigManager
 from src.utils.logger import setup_logger
+from .alpha_vantage_adapter import AlphaVantageAdapter  # 使用相对导入
 
 logger = setup_logger('api_manager')
 
