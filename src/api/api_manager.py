@@ -12,6 +12,24 @@ class APIManager:
         self.config_manager = ConfigManager()
         self.price_query = PriceQueryManager(self.config_manager)
         self.trading = TradingAPIManager(self.config_manager)
+        
+        # 从配置加载初始API设置
+        api_config = self.config_manager.get_api_config()
+        logger.debug(f"初始化时加载的 API 配置: {api_config}")
+        if api_config['choice'] == 'alpha_vantage' and api_config.get('alpha_vantage_key'):
+            self.initialize_api_manager('alpha_vantage', api_config['alpha_vantage_key'])
+        else:
+            self.initialize_api_manager('yahoo')
+
+    def initialize_api_manager(self, api_choice: str = None, api_key: str = '') -> None:
+        """初始化API管理器"""
+        logger.debug(f"初始化 API 管理器: choice={api_choice}, key={'*'*len(api_key) if api_key else 'None'}")
+        if api_choice:
+            api_config = {'choice': api_choice}
+            if api_key:
+                api_config['alpha_vantage_key'] = api_key
+            self.config_manager.set_api_config(api_config)
+        self.price_query.switch_api(api_choice or self.config_manager.get_api_config().get('choice', 'yahoo'))
     
     def get_stock_price(self, symbol: str) -> Tuple[float, str]:
         return self.price_query.get_stock_price(symbol)

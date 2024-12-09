@@ -200,15 +200,22 @@ class ConfigManager:
         self.user_config = DEFAULT_USER_CONFIG.copy()
         self.save_user_config()
 
-    def get_api_config(self) -> Dict[str, Any]:
-        """获取API配置"""
-        return self.user_config.get('API', {})
+    def get_api_config(self) -> Dict[str, str]:
+        """获取 API 配置"""
+        api_config = self.get_config('API', {})
+        if not api_config:
+            # 如果没有配置，返回默认值
+            return {'choice': 'yahoo', 'alpha_vantage_key': ''}
+        return api_config
 
-    def set_api_config(self, api_config: Dict[str, Any]) -> None:
-        """设置API配置"""
-        self.user_config['API'] = api_config
-        self.save_user_config()
-
+    def set_api_config(self, config: Dict[str, str]) -> None:
+        """保存 API 配置"""
+        current_config = self.get_api_config()  # 获取当前配置
+        current_config.update(config)  # 更新配置
+        logger.debug(f"保存 API 配置: {current_config}")  # 添加日志
+        self.set_config('API', current_config)  # 保存完整配置
+        self.save_user_config()  # 立即保存到文件
+    
     def get_trading_config(self) -> Dict[str, Any]:
         """获取交易配置"""
         return self.user_config.get('Trading', {})

@@ -35,6 +35,7 @@ class PriceQueryManager(BaseAPIManager):
         from .alpha_vantage_adapter import AlphaVantageAdapter
         from .yahoo_finance_adapter import YahooFinanceAdapter
         
+        # 初始化 API 实例
         self.price_query_apis = {
             'yahoo': YahooFinanceAdapter(),
             'alpha_vantage': AlphaVantageAdapter(
@@ -43,6 +44,7 @@ class PriceQueryManager(BaseAPIManager):
         }
     
     def switch_api(self, api_name: str):
+        logger.debug(f"Switching API from {self.current_api} to {api_name}")
         if api_name not in self.price_query_apis:
             raise ValueError(f"不支持的 API: {api_name}")
         self.current_api = api_name

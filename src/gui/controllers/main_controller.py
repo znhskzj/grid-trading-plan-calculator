@@ -341,21 +341,45 @@ class MainController:
         
         # 强制更新UI
         self.main_window.master.update()
-        
-        if self.viewmodel.api_choice != self.api_manager.current_price_api:
+
+        # 修改这行代码
+        if self.viewmodel.api_choice != self.api_manager.price_query.current_api:
             self._initialize_api_manager()
 
         try:
-            current_price, api_used = self.api_manager.get_stock_price(symbol)
-            current_price = round(current_price, 2)
-            self._update_price_fields(symbol, current_price, api_used)
+            # 设置超时时间
+            import threading
+            import queue
+
+            q = queue.Queue()
+            def query_price():
+                try:
+                    current_price, api_used = self.api_manager.get_stock_price(symbol)
+                    q.put((True, current_price, api_used))
+                except Exception as e:
+                    q.put((False, str(e), None))
+
+            thread = threading.Thread(target=query_price)
+            thread.daemon = True
+            thread.start()
             
-            # 确保更新 UI
-            self.main_window.right_frame.update_fields({
-                'initial_price': current_price,
-                'stop_loss_price': round(current_price * 0.9, 2)
-            })
-            
+            # 等待最多60秒
+            try:
+                success, result, api_used = q.get(timeout=60)
+                if success:
+                    current_price = round(float(result), 2)
+                    self._update_price_fields(symbol, current_price, api_used)
+                    
+                    # 确保更新 UI
+                    self.main_window.right_frame.update_fields({
+                        'initial_price': current_price,
+                        'stop_loss_price': round(current_price * 0.9, 2)
+                    })
+                else:
+                    raise APIError(result)
+            except queue.Empty:
+                raise APIError("获取价格超时，请稍后重试")
+
         except APIError as e:
             self._handle_price_query_error(str(e), symbol)
         except Exception as e:
@@ -895,10 +919,13 @@ class MainController:
         """根据处理后的指令更新 ViewModel"""
         self.viewmodel.update_from_instruction(processed_instruction)
 
-    def initialize_api_manager(self, api_choice: str, api_key: str = '') -> None:
-        self.api_manager.switch_price_api(api_choice)
-        if api_choice == 'alpha_vantage':
-            self.api_manager.set_alpha_vantage_key(api_key)
+    def initialize_api_manager(self, api_choice: str = None, api_key: str = '') -> None:
+        """初始化API管理器"""
+        if api_choice:
+            self.viewmodel.update_api_choice(api_choice)
+        self.api_manager.price_query.switch_api(self.viewmodel.api_choice)
+        if api_choice == 'alpha_vantage' and api_key:
+            self.api_manager.price_query.set_alpha_vantage_key(api_key)
 
     def update_force_simulate_mode(self, state: str) -> None:
         self.update_status(f"已{state}强制模拟模式")

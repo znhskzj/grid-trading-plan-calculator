@@ -9,9 +9,10 @@ from .price_query_interface import PriceQueryInterface
 logger = setup_logger('alpha_vantage')
 
 class AlphaVantageAdapter(PriceQueryInterface):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str = ''):
         self.api_key = api_key
         self.ts = None
+        logger.debug(f"AlphaVantage适配器初始化, key长度: {len(api_key) if api_key else 0}")
 
     def get_stock_price(self, symbol: str) -> Tuple[float, str]:
         """

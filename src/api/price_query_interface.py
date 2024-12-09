@@ -1,6 +1,7 @@
 # src/api/price_query_interface.py
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional
+from src.config.config_manager import ConfigManager
 
 class PriceQueryInterface(ABC):
     @abstractmethod

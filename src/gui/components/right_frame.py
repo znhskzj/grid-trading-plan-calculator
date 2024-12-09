@@ -25,10 +25,13 @@ class RightFrame(tk.Frame):
         self.num_grids_var = tk.StringVar()
         self.instruction_var = tk.StringVar()
         self.allocation_method_var = tk.IntVar()
-        self.api_choice = tk.StringVar(value="yahoo")
+        # 从配置加载初始值，而不是硬编码
+        api_config = self.controller.config_manager.get_api_config()
+        self.api_choice = tk.StringVar(value=api_config.get('choice', 'yahoo'))
+        self.alpha_vantage_key = tk.StringVar(value=api_config.get('alpha_vantage_key', ''))
+
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
-        self.alpha_vantage_key = tk.StringVar()
         self.force_simulate = True
         self.trade_mode_var = tk.StringVar(value="模拟")
         self.market_var = tk.StringVar(value="美股")
@@ -240,12 +243,14 @@ class RightFrame(tk.Frame):
 
     def on_api_change(self) -> None:
         new_api_choice = self.api_choice.get()
+        self.controller.viewmodel.update_api_choice(new_api_choice)  # 更新 ViewModel
+        
         if new_api_choice == 'alpha_vantage':
             self._handle_alpha_vantage_selection()
         else:
-            self.controller.initialize_api_manager()
+            self.controller.initialize_api_manager('yahoo')  # 传入具体的 API 选择
         
-        self.controller.update_status(f"已切换到 {new_api_choice} API")
+        self.controller.update_status(f"已切换到 {new_api_choice} API", force_update=True)
         self.controller.save_user_settings()
 
     def _handle_alpha_vantage_selection(self) -> None:
@@ -268,12 +273,21 @@ class RightFrame(tk.Frame):
             self.controller.initialize_api_manager('alpha_vantage', new_key)
             self.controller.save_user_settings()
         else:
+            # 重要：先更新 viewmodel
+            self.controller.viewmodel.update_api_choice('yahoo')
+            # 更新 UI 选择
             self.api_choice.set('yahoo')
-            self.controller.initialize_api_manager('yahoo', '')
-            messagebox.showinfo("API 选择", "由于未提供 Alpha Vantage API Key，已切换回 Yahoo Finance API。")
+            # 初始化 API 管理器
+            self.controller.initialize_api_manager('yahoo')
+            # 更新配置
             self.controller.save_user_settings()
+            messagebox.showinfo("API 选择", "由于未提供 Alpha Vantage API Key，已切换回 Yahoo Finance API。")
         
-        self.controller.update_status(f"已切换到 {self.api_choice.get()} API")
+        # 使用当前实际的 API 更新状态栏
+        self.controller.update_status(
+            f"已切换到 {self.controller.viewmodel.api_choice} API", 
+            force_update=True
+        )
 
     def on_entry_click(self, event: tk.Event) -> None:
         if event.widget.get() == "例：SOXL现价到37.5之间分批买，压力39+，止损36.8":
